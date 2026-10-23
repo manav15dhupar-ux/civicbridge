@@ -4,6 +4,22 @@
  */
 
 /**
+ * Escapes a string for safe insertion into HTML to prevent XSS.
+ * Use this for all user-supplied or AI-generated string values before injecting into innerHTML.
+ * @param {unknown} value - Value to escape.
+ * @returns {string} HTML-safe escaped string.
+ */
+function escapeHtml(value) {
+  if (value === null || value === undefined) return "";
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
+/**
  * Severity configuration styling.
  */
 const SEVERITY_CONFIG = {
@@ -41,7 +57,7 @@ export function showToast(message, type = "info") {
   toast.className = `flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg border backdrop-blur text-sm font-medium transition-all duration-300 transform translate-y-2 opacity-0 ${bgColors[type] || bgColors.info}`;
   toast.innerHTML = `
     <span class="font-bold text-base leading-none">${icons[type] || "ℹ"}</span>
-    <span class="flex-1">${message}</span>
+    <span class="flex-1">${escapeHtml(message)}</span>
   `;
 
   container.appendChild(toast);
@@ -73,18 +89,18 @@ export function renderStructuredCard(report) {
         <div>
           <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
             <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-            ${report.category}
+            ${escapeHtml(report.category)}
           </span>
-          <h3 class="text-lg font-bold text-slate-900 mt-2">${report.subcategory || report.category}</h3>
+          <h3 class="text-lg font-bold text-slate-900 mt-2">${escapeHtml(report.subcategory || report.category)}</h3>
         </div>
         <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold ${sev.color}">
           <span class="w-2 h-2 rounded-full ${sev.dot}"></span>
-          ${sev.label}
+          ${escapeHtml(sev.label)}
         </div>
       </div>
 
       <p class="text-sm text-slate-700 leading-relaxed bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">
-        ${report.description}
+        ${escapeHtml(report.description)}
       </p>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs">
@@ -92,16 +108,16 @@ export function renderStructuredCard(report) {
           <span class="text-slate-400 font-bold text-sm">📍</span>
           <div>
             <span class="font-semibold text-slate-800 block">Identified Location</span>
-            <span class="text-slate-600">${report.location_text}</span>
-            <span class="text-[11px] text-slate-400 font-mono block mt-0.5">${report.lat?.toFixed(4)}, ${report.lng?.toFixed(4)}</span>
+            <span class="text-slate-600">${escapeHtml(report.location_text)}</span>
+            <span class="text-[11px] text-slate-400 font-mono block mt-0.5">${escapeHtml(report.lat?.toFixed(4))}, ${escapeHtml(report.lng?.toFixed(4))}</span>
           </div>
         </div>
         <div class="flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
           <span class="text-slate-400 font-bold text-sm">🏛️</span>
           <div>
             <span class="font-semibold text-slate-800 block">Responsible Department</span>
-            <span class="text-slate-600">${report.responsible_authority}</span>
-            <span class="text-[11px] text-emerald-600 font-semibold block mt-0.5">Confidence: ${Math.round((report.confidence || 0.95) * 100)}%</span>
+            <span class="text-slate-600">${escapeHtml(report.responsible_authority)}</span>
+            <span class="text-[11px] text-emerald-600 font-semibold block mt-0.5">Confidence: ${escapeHtml(Math.round((report.confidence || 0.95) * 100))}%</span>
           </div>
         </div>
       </div>
@@ -109,11 +125,11 @@ export function renderStructuredCard(report) {
       <div class="space-y-2 pt-1">
         <div class="text-xs">
           <span class="font-bold text-rose-700 uppercase tracking-wide text-[10px]">Urgency Justification</span>
-          <p class="text-slate-600 mt-0.5">${report.urgency_reason}</p>
+          <p class="text-slate-600 mt-0.5">${escapeHtml(report.urgency_reason)}</p>
         </div>
         <div class="text-xs">
           <span class="font-bold text-slate-700 uppercase tracking-wide text-[10px]">Evidence Synthesis</span>
-          <p class="text-slate-500 mt-0.5">${report.evidence_summary}</p>
+          <p class="text-slate-500 mt-0.5">${escapeHtml(report.evidence_summary)}</p>
         </div>
       </div>
     </div>
@@ -139,24 +155,24 @@ export function renderVerificationCard(verification) {
     ? `
       <div class="mt-3 pt-3 border-t border-slate-100 space-y-2">
         <span class="text-xs font-bold text-slate-700 uppercase tracking-wide block">
-          Matching Civic Complaints Within 200m (${verification.matches.length})
+          Matching Civic Complaints Within 200m (${escapeHtml(verification.matches.length)})
         </span>
         <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
           ${verification.matches.map((m) => `
             <div class="p-2.5 rounded-xl border border-slate-200/90 bg-slate-50/60 flex items-center justify-between text-xs hover:bg-white transition">
               <div>
                 <div class="font-bold text-slate-800 flex items-center gap-1.5">
-                  <span>${m.subcategory || m.category}</span>
-                  <span class="font-mono text-[10px] text-slate-400">#${m.trackingId}</span>
+                  <span>${escapeHtml(m.subcategory || m.category)}</span>
+                  <span class="font-mono text-[10px] text-slate-400">#${escapeHtml(m.trackingId)}</span>
                 </div>
                 <div class="text-slate-500 text-[11px] mt-0.5">
-                  📍 ${m.distanceMeters}m away • ${m.reporters} citizen(s) reported
+                  📍 ${escapeHtml(m.distanceMeters)}m away • ${escapeHtml(m.reporters)} citizen(s) reported
                 </div>
               </div>
               <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                 m.status === 'Resolved' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
               }">
-                ${m.status}
+                ${escapeHtml(m.status)}
               </span>
             </div>
           `).join("")}
@@ -179,9 +195,9 @@ export function renderVerificationCard(verification) {
         </div>
         <div class="text-right">
           <div class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${scoreBadgeColor}">
-            ${verification.verificationScore}% Verified
+            ${escapeHtml(verification.verificationScore)}% Verified
           </div>
-          <div class="text-[10px] text-slate-500 mt-0.5">${verification.verificationLabel}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">${escapeHtml(verification.verificationLabel)}</div>
         </div>
       </div>
 
@@ -193,10 +209,10 @@ export function renderVerificationCard(verification) {
         <div class="text-xs">
           <span class="font-bold text-slate-900 block text-sm">
             ${verification.otherReportersCount > 0
-              ? `${verification.otherReportersCount} other citizens reported this issue nearby`
+              ? `${escapeHtml(verification.otherReportersCount)} other citizens reported this issue nearby`
               : "Single-source new incident report"}
           </span>
-          <span class="text-slate-600">${verification.reason}</span>
+          <span class="text-slate-600">${escapeHtml(verification.reason)}</span>
         </div>
       </div>
 
@@ -233,7 +249,7 @@ export function renderPrivacyShieldCard(privacyShield) {
       <div class="grid grid-cols-2 gap-2 text-xs">
         <div class="bg-white/5 border border-white/10 rounded-xl p-2.5">
           <span class="text-slate-400 block text-[11px]">Identities Protected</span>
-          <span class="text-white font-bold text-base mt-0.5 block">${logs.length} Entities</span>
+          <span class="text-white font-bold text-base mt-0.5 block">${escapeHtml(logs.length)} Entities</span>
         </div>
         <div class="bg-white/5 border border-white/10 rounded-xl p-2.5">
           <span class="text-slate-400 block text-[11px]">Raw Media Stored</span>
@@ -248,8 +264,8 @@ export function renderPrivacyShieldCard(privacyShield) {
             ${logs.map((item) => `
               <div class="text-xs bg-white/5 rounded-lg p-2 border border-white/10 flex items-center justify-between">
                 <div>
-                  <span class="text-[10px] text-slate-400 uppercase tracking-wide block">${item.type}</span>
-                  <span class="font-mono text-emerald-300 text-[11px]">${item.masked}</span>
+                  <span class="text-[10px] text-slate-400 uppercase tracking-wide block">${escapeHtml(item.type)}</span>
+                  <span class="font-mono text-emerald-300 text-[11px]">${escapeHtml(item.masked)}</span>
                 </div>
                 <span class="text-[10px] text-slate-400">Scrubbed</span>
               </div>
@@ -292,11 +308,11 @@ export function renderActionPlanCard(actionPlan) {
         <div class="flex items-start justify-between gap-2">
           <div>
             <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Responsible Public Body</span>
-            <h4 class="font-bold text-slate-900 text-sm mt-0.5">${auth.name}</h4>
-            <div class="text-xs text-slate-500 font-medium">${auth.marathiName || ""}</div>
+            <h4 class="font-bold text-slate-900 text-sm mt-0.5">${escapeHtml(auth.name)}</h4>
+            <div class="text-xs text-slate-500 font-medium">${escapeHtml(auth.marathiName || "")}</div>
           </div>
           <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 flex-shrink-0">
-            SLA: ${timeline.slaHours}h
+            SLA: ${escapeHtml(timeline.slaHours)}h
           </span>
         </div>
 
@@ -319,11 +335,11 @@ export function renderActionPlanCard(actionPlan) {
           ${actionPlan.phases.map((phase) => `
             <div class="flex items-start gap-3 p-3 rounded-xl bg-slate-50/70 border border-slate-100">
               <div class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs flex-shrink-0 mt-0.5">
-                ${phase.step}
+                ${escapeHtml(phase.step)}
               </div>
               <div class="text-xs">
-                <span class="font-bold text-slate-900 block">${phase.title}</span>
-                <span class="text-slate-600 mt-0.5 block leading-relaxed">${phase.description}</span>
+                <span class="font-bold text-slate-900 block">${escapeHtml(phase.title)}</span>
+                <span class="text-slate-600 mt-0.5 block leading-relaxed">${escapeHtml(phase.description)}</span>
               </div>
             </div>
           `).join("")}
@@ -334,11 +350,11 @@ export function renderActionPlanCard(actionPlan) {
       <div class="space-y-2 pt-1">
         <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wide">File Online Directly</h4>
         <ol class="list-decimal list-inside space-y-1 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
-          ${actionPlan.onlineFilingSteps.map((step) => `<li class="leading-relaxed">${step}</li>`).join("")}
+          ${actionPlan.onlineFilingSteps.map((step) => `<li class="leading-relaxed">${escapeHtml(step)}</li>`).join("")}
         </ol>
         <div class="pt-1">
           <a href="${auth.portalUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800">
-            <span>Open ${auth.portalName}</span>
+            <span>Open ${escapeHtml(auth.portalName)}</span>
             <span>↗</span>
           </a>
         </div>
@@ -350,11 +366,11 @@ export function renderActionPlanCard(actionPlan) {
         <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs space-y-2">
           <div>
             <span class="font-bold text-slate-800 block">PMC Head Office</span>
-            <span class="text-slate-600">${actionPlan.offlineOfficeDetails.headOffice || "PMC Main Building, Shivajinagar, Pune"}</span>
+            <span class="text-slate-600">${escapeHtml(actionPlan.offlineOfficeDetails.headOffice || "PMC Main Building, Shivajinagar, Pune")}</span>
           </div>
           <div>
             <span class="font-bold text-slate-800 block">Timings & Operating Hours</span>
-            <span class="text-slate-600">${actionPlan.offlineOfficeDetails.timings || "10:00 AM - 5:30 PM (Mon-Fri)"}</span>
+            <span class="text-slate-600">${escapeHtml(actionPlan.offlineOfficeDetails.timings || "10:00 AM - 5:30 PM (Mon-Fri)")}</span>
           </div>
           <div>
             <span class="font-bold text-slate-800 block">Documents to Carry</span>
@@ -362,7 +378,7 @@ export function renderActionPlanCard(actionPlan) {
               ${(actionPlan.offlineOfficeDetails.documentsToCarry || [
                 "2 printed photographs of defect",
                 "Application letter addressed to Ward Officer"
-              ]).map((doc) => `<li>${doc}</li>`).join("")}
+              ]).map((doc) => `<li>${escapeHtml(doc)}</li>`).join("")}
             </ul>
           </div>
         </div>
@@ -373,7 +389,7 @@ export function renderActionPlanCard(actionPlan) {
         <span class="text-emerald-700 text-sm">🌱</span>
         <div>
           <span class="font-bold block">How Your Report Helps Pune</span>
-          <span class="text-emerald-800 mt-0.5 block leading-relaxed">${actionPlan.communityImpact}</span>
+          <span class="text-emerald-800 mt-0.5 block leading-relaxed">${escapeHtml(actionPlan.communityImpact)}</span>
         </div>
       </div>
 
@@ -448,13 +464,13 @@ export function renderFileComplaintPanel(data) {
           </div>
           <h3 class="text-xl font-extrabold text-slate-900 mt-1">Official Municipal Filing Hub</h3>
           <p class="text-xs text-slate-500 mt-0.5">
-            ${auth.authorityName || "Pune Municipal Corporation"} • ${auth.department || "Public Grievance Cell"}
+            ${escapeHtml(auth.authorityName || "Pune Municipal Corporation")} • ${escapeHtml(auth.department || "Public Grievance Cell")}
           </p>
         </div>
         <div class="flex items-center gap-2 self-start sm:self-center">
           <div class="bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-xl text-right">
             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Tracking Token</span>
-            <span id="filingTrackingToken" class="font-mono text-sm font-extrabold text-blue-600">${trackingId}</span>
+            <span id="filingTrackingToken" class="font-mono text-sm font-extrabold text-blue-600">${escapeHtml(trackingId)}</span>
           </div>
         </div>
       </div>
@@ -492,11 +508,11 @@ export function renderFileComplaintPanel(data) {
                   }">
                     ${icon}
                   </span>
-                  <span class="text-[10px] font-mono text-slate-500 font-medium">${stage.timestamp}</span>
+                  <span class="text-[10px] font-mono text-slate-500 font-medium">${escapeHtml(stage.timestamp)}</span>
                 </div>
                 <div>
-                  <span class="font-bold text-slate-900 block text-xs">${stage.name}</span>
-                  <span class="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">${stage.description}</span>
+                  <span class="font-bold text-slate-900 block text-xs">${escapeHtml(stage.name)}</span>
+                  <span class="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">${escapeHtml(stage.description)}</span>
                 </div>
               </div>
             `;
@@ -562,13 +578,13 @@ export function renderFileComplaintPanel(data) {
           <div class="text-xs space-y-2 text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
             <div>
               <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Office Name & Address</span>
-              <span class="font-medium text-slate-800">${offline.officeName || auth.name}</span>
-              <span class="text-[11px] text-slate-500 block mt-0.5">${offline.officeAddress || auth.officeAddress || "PMC Main Building, Shivajinagar, Pune"}</span>
+              <span class="font-medium text-slate-800">${escapeHtml(offline.officeName || auth.name)}</span>
+              <span class="text-[11px] text-slate-500 block mt-0.5">${escapeHtml(offline.officeAddress || auth.officeAddress || "PMC Main Building, Shivajinagar, Pune")}</span>
             </div>
 
             <div class="pt-1 border-t border-slate-200">
               <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Best Time to Visit</span>
-              <span class="text-emerald-700 font-semibold">${offline.bestTimeToVisit || "10:30 AM - 1:00 PM (Monday to Friday)"}</span>
+              <span class="text-emerald-700 font-semibold">${escapeHtml(offline.bestTimeToVisit || "10:30 AM - 1:00 PM (Monday to Friday)")}</span>
             </div>
 
             <div class="pt-1 border-t border-slate-200">
@@ -589,7 +605,7 @@ export function renderFileComplaintPanel(data) {
               💬 What to Say to the Junior Engineer:
             </span>
             <p class="italic text-[11px] leading-relaxed">
-              "${offline.whatToSay || `I am here to register an urgent civic defect at this location under statutory PMC SLAs. Please provide my in-ward acknowledgment stamp.`}"
+              "${escapeHtml(offline.whatToSay || `I am here to register an urgent civic defect at this location under statutory PMC SLAs. Please provide my in-ward acknowledgment stamp.`)}"
             </p>
           </div>
         </div>
@@ -633,7 +649,7 @@ export function renderFileComplaintPanel(data) {
           }"
         >
           <span>${isFiled ? '✓' : '🚀'}</span>
-          <span>${isFiled ? `Grievance Filed & Logged (#${trackingId})` : 'File This Complaint & Generate Tracking Token'}</span>
+          <span>${isFiled ? `Grievance Filed & Logged (#${escapeHtml(trackingId)})` : 'File This Complaint & Generate Tracking Token'}</span>
         </button>
       </div>
 

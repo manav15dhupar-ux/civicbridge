@@ -1,19 +1,26 @@
 /**
  * @fileoverview Privacy Shield and Redaction Service for CivicBridge.
  * Detects and masks Personally Identifiable Information (PII) including Aadhaar numbers,
- * Indian mobile phone numbers, vehicle registration numbers (MH-12/MH-14), and personal names.
+ * Indian mobile numbers, email addresses, vehicle plates (MH-12/14), PAN cards, and personal names.
+ *
+ * CRITICAL PRIVACY INVARIANT:
+ * Raw PII is never stored in persistent databases, never sent to external AI APIs,
+ * and never written to server log streams. Only aggregate redaction counts and
+ * sanitized token masks are logged.
  */
 
 /**
- * Regular expressions for Indian identity markers and sensitive data patterns.
+ * Regular expressions for Indian identity markers and sensitive personal data.
  */
 const PATTERNS = {
   // Aadhaar: 12 digits, optionally spaced in blocks of 4 (e.g., 1234 5678 9012 or 123456789012)
   aadhaar: /\b([2-9]{1}\d{3})\s?(\d{4})\s?(\d{4})\b/g,
 
   // Indian Mobile Numbers: +91, 0, or 10-digit starting with 6, 7, 8, or 9
-  // Supports spaces, hyphens, or continuous digits
   indianPhone: /(?:\+91[\s.-]?|91[\s.-]?|0)?\b([6-9]\d{4})[\s.-]?(\d{5})\b/g,
+
+  // Email Addresses
+  email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
 
   // Permanent Account Number (PAN): 5 letters, 4 digits, 1 letter
   panCard: /\b([A-Z]{5})(\d{4})([A-Z]{1})\b/g,
@@ -22,8 +29,7 @@ const PATTERNS = {
   vehiclePlate: /\b(MH[\s-]?[0-9]{1,2}[\s-]?[A-Z]{1,3}[\s-]?[0-9]{1,4})\b/gi,
 
   // Personal name declaration markers in English, Hindi, and Marathi
-  // Negative lookahead avoids matching phrases like "Complainant Aadhaar" or "Complainant Phone"
-  nameIntroEn: /(?:my\s+name\s+is|i\s+am|reported\s+by|complainant(?:\s+is)?)\s+(?!(?:aadhaar|phone|number|mobile|id|officer)\b)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/gi,
+  nameIntroEn: /(?:my\s+name\s+is|i\s+am|reported\s+by|complainant(?:\s+is)?)\s+(?!(?:aadhaar|phone|email|number|mobile|id|officer)\b)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/gi,
   nameIntroHi: /(?:मेरा\s+नाम|शिकायतकर्ता(?:\s+का\s+नाम)?)\s+([^\s,.]+)/gi,
   nameIntroMr: /(?:(?:माझे|माझं)\s+नाव|तक्रारदार(?:\s+नाव)?)\s+([^\s,.]+)/gi
 };
@@ -40,7 +46,7 @@ function maskAadhaar(match) {
 }
 
 /**
- * Masks a phone number displaying only first 2 and last 2 digits (e.g. "+91 98*** **34").
+ * Masks a phone number displaying only first 2 and last 2 digits (e.g. "+91 98***-**34").
  * @param {string} match - Full matched phone number.
  * @returns {string} Masked phone number string.
  */
@@ -51,6 +57,18 @@ function maskPhone(match) {
     return `+91 ${cleanDigits.slice(0, 2)}***-**${cleanDigits.slice(-2)}`;
   }
   return `[REDACTED-PHONE]`;
+}
+
+/**
+ * Masks an email address (e.g. "j***@domain.com").
+ * @param {string} email - Raw matched email address.
+ * @returns {string} Masked email string.
+ */
+function maskEmail(email) {
+  const [user, domain] = email.split("@");
+  if (!user || !domain) return "[REDACTED-EMAIL]";
+  const maskedUser = user.length <= 2 ? `${user[0]}*` : `${user[0]}***${user[user.length - 1]}`;
+  return `${maskedUser}@${domain}`;
 }
 
 /**
@@ -65,101 +83,127 @@ function maskVehiclePlate(match) {
 }
 
 /**
- * Redacts PII from text and logs all redaction operations for the Privacy Shield inspection panel.
+ * Redacts all Personally Identifiable Information (PII) from text.
+ * Strictly records counts and masked tokens only; never records or logs original raw PII.
  * @param {string} text - Raw input text from citizen complaint.
- * @returns {{ cleanedText: string, redactionLog: Array<{ type: string, original: string, masked: string, timestamp: string }> }}
+ * @returns {{
+ *   cleanedText: string,
+ *   redactionCounts: { aadhaar: number, phone: number, email: number, vehiclePlate: number, name: number, pan: number, total: number },
+ *   redactionLog: Array<{ type: string, masked: string, timestamp: string }>
+ * }}
  */
 export function redactSensitiveData(text) {
+  const emptyCounts = { aadhaar: 0, phone: 0, email: 0, vehiclePlate: 0, name: 0, pan: 0, total: 0 };
   if (typeof text !== "string" || !text.trim()) {
-    return { cleanedText: "", redactionLog: [] };
+    return { cleanedText: "", redactionCounts: emptyCounts, redactionLog: [] };
   }
 
   let cleaned = text;
   const redactionLog = [];
+  const counts = { ...emptyCounts };
   const now = new Date().toISOString();
 
   // 1. Redact Aadhaar Numbers
   cleaned = cleaned.replace(PATTERNS.aadhaar, (fullMatch) => {
     const masked = maskAadhaar(fullMatch);
+    counts.aadhaar += 1;
+    counts.total += 1;
     redactionLog.push({
       type: "Aadhaar Identity Number",
-      original: `Aadhaar ending in ${fullMatch.replace(/\D/g, "").slice(-4)}`,
       masked,
       timestamp: now
     });
     return masked;
   });
 
-  // 2. Redact Phone Numbers
+  // 2. Redact Phone Numbers (ignoring statutory short helplines)
   cleaned = cleaned.replace(PATTERNS.indianPhone, (fullMatch) => {
-    // Avoid redacting statutory helpline numbers (e.g. 1912 or short codes)
     const digits = fullMatch.replace(/\D/g, "");
     if (digits.length < 10) return fullMatch;
 
     const masked = maskPhone(fullMatch);
+    counts.phone += 1;
+    counts.total += 1;
     redactionLog.push({
       type: "Citizen Mobile Number",
-      original: `Phone ${digits.slice(0, 2)}******${digits.slice(-2)}`,
       masked,
       timestamp: now
     });
     return masked;
   });
 
-  // 3. Redact PAN Cards
-  cleaned = cleaned.replace(PATTERNS.panCard, (fullMatch) => {
+  // 3. Redact Email Addresses
+  cleaned = cleaned.replace(PATTERNS.email, (fullMatch) => {
+    const masked = maskEmail(fullMatch);
+    counts.email += 1;
+    counts.total += 1;
+    redactionLog.push({
+      type: "Email Address",
+      masked,
+      timestamp: now
+    });
+    return masked;
+  });
+
+  // 4. Redact PAN Cards
+  cleaned = cleaned.replace(PATTERNS.panCard, () => {
     const masked = `[PAN-CARD-REDACTED]`;
+    counts.pan += 1;
+    counts.total += 1;
     redactionLog.push({
       type: "Income Tax PAN",
-      original: `PAN Card (${fullMatch.slice(0, 2)}****${fullMatch.slice(-1)})`,
       masked,
       timestamp: now
     });
     return masked;
   });
 
-  // 4. Redact Vehicle Registration Plates
+  // 5. Redact Vehicle Registration Plates
   cleaned = cleaned.replace(PATTERNS.vehiclePlate, (fullMatch) => {
     const masked = maskVehiclePlate(fullMatch);
+    counts.vehiclePlate += 1;
+    counts.total += 1;
     redactionLog.push({
       type: "Vehicle Registration Plate",
-      original: fullMatch,
       masked,
       timestamp: now
     });
     return masked;
   });
 
-  // 5. Redact English name disclosures
+  // 6. Redact English name disclosures
   cleaned = cleaned.replace(PATTERNS.nameIntroEn, (fullMatch, nameGroup) => {
     const masked = "[Citizen Complainant]";
+    counts.name += 1;
+    counts.total += 1;
     redactionLog.push({
       type: "Personal Name Disclosure",
-      original: nameGroup,
       masked,
       timestamp: now
     });
     return fullMatch.replace(nameGroup, masked);
   });
 
-  // 6. Redact Hindi name disclosures
+  // 7. Redact Hindi name disclosures
   cleaned = cleaned.replace(PATTERNS.nameIntroHi, (fullMatch, nameGroup) => {
     const masked = "[नागरिक तक्रारकर्ता]";
+    counts.name += 1;
+    counts.total += 1;
     redactionLog.push({
       type: "Personal Name Disclosure (Hindi)",
-      original: nameGroup,
       masked,
       timestamp: now
     });
     return fullMatch.replace(nameGroup, masked);
   });
 
-  // 7. Redact Marathi name disclosures
+  // 8. Redact Marathi name disclosures
   cleaned = cleaned.replace(PATTERNS.nameIntroMr, (fullMatch, nameGroup) => {
     const masked = "[नागरिक तक्रारदार]";
+    counts.name += 1;
+    counts.total += 1;
     redactionLog.push({
       type: "Personal Name Disclosure (Marathi)",
-      original: nameGroup,
       masked,
       timestamp: now
     });
@@ -168,6 +212,7 @@ export function redactSensitiveData(text) {
 
   return {
     cleanedText: cleaned,
+    redactionCounts: counts,
     redactionLog
   };
 }
@@ -179,7 +224,6 @@ export function redactSensitiveData(text) {
  */
 export function scrubRawMediaBuffer(file) {
   if (file && file.buffer) {
-    // Fill buffer with zeros before letting garbage collector reclaim
     try {
       file.buffer.fill(0);
     } catch {

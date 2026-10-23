@@ -5,7 +5,12 @@
 
 import express from "express";
 import multer from "multer";
-import { validateComplaintInput, MAX_FILE_SIZE_BYTES } from "../utils/validators.js";
+import {
+  validateComplaintInput,
+  MAX_FILE_SIZE_BYTES,
+  DraftLetterRequestSchema,
+  FileComplaintRequestSchema
+} from "../utils/validators.js";
 import { redactSensitiveData, scrubRawMediaBuffer } from "../services/redactService.js";
 import { analyzeWithGemini, draftComplaintLetter } from "../services/geminiService.js";
 import { verifyComplaint, getExistingReports, appendReport } from "../services/verificationService.js";
@@ -61,8 +66,8 @@ router.post("/analyze", complaintUploadMiddleware, async (req, res, next) => {
       });
     }
 
-    // 2. Privacy Shield: Redact PII (Aadhaar, Phone, Vehicle Plates, Names)
-    const { cleanedText, redactionLog } = redactSensitiveData(rawText);
+    // 2. Privacy Shield: Redact PII (Aadhaar, Phone, Email, Vehicle Plates, Names)
+    const { cleanedText, redactionCounts, redactionLog } = redactSensitiveData(rawText);
 
     // 3. AI Structuring with Gemini (strict JSON schema)
     const structuredReport = await analyzeWithGemini({
@@ -91,7 +96,8 @@ router.post("/analyze", complaintUploadMiddleware, async (req, res, next) => {
         actionPlan,
         privacyShield: {
           redactionLog,
-          itemsRedactedCount: redactionLog.length,
+          itemsRedactedCount: redactionCounts.total,
+          redactionCounts,
           rawFilesRetained: false,
           consentVerified: true
         }
@@ -108,13 +114,14 @@ router.post("/analyze", complaintUploadMiddleware, async (req, res, next) => {
  */
 router.post("/draft-letter", async (req, res, next) => {
   try {
-    const { report, language = "en" } = req.body;
-    if (!report || !report.category) {
+    const parsed = DraftLetterRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({
         success: false,
-        error: "Missing report payload for letter generation."
+        errors: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`)
       });
     }
+    const { report, language } = parsed.data;
 
     const draft = await draftComplaintLetter({ report, language });
     return res.json({
@@ -136,13 +143,14 @@ router.post("/draft-letter", async (req, res, next) => {
  */
 router.post("/file", async (req, res, next) => {
   try {
-    const { report, actionPlan, citizenNote = "" } = req.body;
-    if (!report || !report.category) {
+    const parsed = FileComplaintRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({
         success: false,
-        error: "Missing or invalid report payload for filing."
+        errors: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`)
       });
     }
+    const { report, actionPlan, citizenNote } = parsed.data;
 
     // Safety: ensure any additional user notes are strictly redacted
     const { cleanedText: redactedNote } = redactSensitiveData(citizenNote);

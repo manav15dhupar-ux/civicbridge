@@ -75,26 +75,57 @@ app.use(
   })
 );
 
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+/**
+ * CORS: only allow the configured origin (defaults to same-origin in production).
+ * Set ALLOWED_ORIGIN env var to permit a specific front-end domain on Render.
+ */
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "http://localhost:3000";
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, mobile apps, same-origin)
+    if (!origin || origin === ALLOWED_ORIGIN) {
+      return callback(null, true);
+    }
+    callback(new Error("Not allowed by CORS"));
+  },
+  credentials: false
+}));
+
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 /**
- * Express Rate Limiting to prevent API abuse and denial of service.
+ * General API rate limiter — 120 requests per 15 minutes per IP.
  */
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 120, // Limit each IP to 120 requests per window
+  windowMs: 15 * 60 * 1000,
+  max: 120,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     success: false,
-    error: "Too many requests submitted from this IP. Please try again after 15 minutes."
+    error: "Too many requests from this IP. Please try again after 15 minutes."
   }
 });
 
-// Apply rate limiter to /api routes
+/**
+ * Stricter rate limiter for the AI analysis endpoint to prevent cost abuse — 20 per 15 minutes.
+ */
+const analyzeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: "Complaint analysis rate limit reached. Please wait 15 minutes before submitting again."
+  }
+});
+
+// Apply general limiter to all /api routes
 app.use("/api", apiLimiter);
+// Apply stricter limiter to the expensive AI route
+app.use("/api/complaints/analyze", analyzeLimiter);
 
 /**
  * Health check endpoint for Render, load balancers, and container monitoring.
@@ -130,17 +161,28 @@ app.get("*", (req, res, next) => {
 /**
  * Centralized Express Error Handling Middleware.
  * Catches unhandled synchronous and asynchronous pipeline errors.
+ * Never exposes internal stack traces or raw error messages in production.
  */
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  console.error("Unhandled Server Error:", err);
-
   const statusCode = err.status || err.statusCode || 500;
-  const message = err.message || "An unexpected error occurred while processing your request.";
+
+  // Log the full error server-side for debugging (never sent to client)
+  console.error(`[ERROR] ${req.method} ${req.path} →`, {
+    message: err.message,
+    code: err.code,
+    status: statusCode
+  });
+
+  // In non-development environments, return a generic message to prevent info leakage
+  const isDev = process.env.NODE_ENV === "development";
+  const clientMessage = isDev
+    ? (err.message || "An unexpected error occurred.")
+    : "An error occurred while processing your request.";
 
   res.status(statusCode).json({
     success: false,
-    error: message,
+    error: clientMessage,
     code: err.code || "INTERNAL_SERVER_ERROR"
   });
 });
