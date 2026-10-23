@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>CivicBridge | AI Civic Grievance Redressal for Pune</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="/css/style.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              900: '#1e3a8a'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen antialiased flex flex-col">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 glass-header border-b border-slate-200/80 px-4 sm:px-6 py-3.5">
+    <div class="max-w-6xl mx-auto flex items-center justify-between gap-4">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-extrabold text-lg shadow-sm">
+          CB
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-extrabold text-slate-900 tracking-tight leading-none">CivicBridge</h1>
+            <span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">Pune</span>
+          </div>
+          <p class="text-[11px] text-slate-500 font-medium">Gemini-Powered Citizen Grievance Engine</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5">
+        <div id="systemStatusPill" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-xs text-slate-600 font-medium">
+          <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+          <span>Checking AI...</span>
+        </div>
+        <span id="reportCountBadge" class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+          15 verified incidents
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-8">
+
+    <!-- Hero / Orientation -->
+    <section class="space-y-2">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
+            Report a Civic Defect in Pune
+          </h2>
+          <p class="text-sm text-slate-600 mt-1 max-w-2xl">
+            Type, speak, or upload photo evidence. CivicBridge removes your personal data, structures the report with Gemini, verifies against neighborhood duplicates, and drafts formal PMC escalation letters.
+          </p>
+        </div>
+        <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
+          <span>Supported:</span>
+          <span class="text-blue-600 font-bold">English</span> •
+          <span class="text-blue-600 font-bold">मराठी</span> •
+          <span class="text-blue-600 font-bold">हिंदी</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 1: Input Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- Left Column: Citizen Input Form (7 cols) -->
+      <div class="lg:col-span-7 bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-sm space-y-5">
+
+        <!-- Quick 1-Click Testing Pills -->
+        <div class="space-y-2">
+          <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+            Quick-Test Realistic Pune Complaints (Click to Load)
+          </span>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="quick-prompt-pill text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-700 transition"
+              data-prompt="Huge pothole on Baner High Street near Balewadi phata. Bikes are slipping constantly in the evening. Call me on 9822012345."
+              data-lat="18.5590" data-lng="73.7868">
+              🕳️ Baner Pothole
+            </button>
+            <button type="button" class="quick-prompt-pill text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-700 transition"
+              data-prompt="गटार तुंबले आहे आणि घाण पाणी कर्वे पुतळ्यासमोर मुख्य रस्त्यावर पसरत आहे. दुर्गंधी सुटली आहे. माझं नाव रमेश पाटील."
+              data-lat="18.5074" data-lng="73.8077">
+              🌊 Kothrud Drain (मराठी)
+            </button>
+            <button type="button" class="quick-prompt-pill text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-700 transition"
+              data-prompt="Live electric cable hanging loose from damaged feeder box near German Bakery Lane 5 Koregaon Park. High electrocution hazard."
+              data-lat="18.5362" data-lng="73.8940">
+              ⚡ KP Exposed Wire
+            </button>
+            <button type="button" class="quick-prompt-pill text-xs font-medium px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-700 transition"
+              data-prompt="Phoenix Mall के पीछे कचरे का ढेर लगा है 4 दिन से, बदबू से सांस लेना मुश्किल हो गया है। आधार 4521 8892 1042."
+              data-lat="18.5679" data-lng="73.9143">
+              🗑️ Viman Nagar Waste (हिंदी)
+            </button>
+          </div>
+        </div>
+
+        <form id="complaintForm" class="space-y-4">
+          <!-- Text Area -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label for="complaintText" class="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                Complaint Description / वर्णन
+              </label>
+              <span class="text-[11px] text-slate-400">Describe what, where, and when</span>
+            </div>
+            <textarea
+              id="complaintText"
+              rows="4"
+              class="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/50 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition resize-none leading-relaxed"
+              placeholder="E.g., Deep pothole near Balewadi Phata, open manhole near Magarpatta gate, or garbage dump on FC Road... Type in English, मराठी or हिंदी."
+            ></textarea>
+          </div>
+
+          <!-- Multi-Input Toolbar (Voice & Media) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+
+            <!-- Voice Recorder Button & Waveform -->
+            <div class="space-y-2">
+              <button
+                type="button"
+                id="btnRecordVoice"
+                class="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold transition shadow-sm"
+              >
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                <span class="record-text">Record Voice Note</span>
+              </button>
+
+              <!-- Live visualizer & Timer -->
+              <div id="recordingStatus" class="hidden flex items-center justify-between px-3 py-2 bg-rose-50 border border-rose-200 rounded-xl">
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span>
+                  <span id="recordingTimer" class="font-mono text-xs font-bold text-rose-700">00:00</span>
+                </div>
+                <div id="audioWaveformVisualizer" class="flex items-center gap-1 h-5">
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                </div>
+              </div>
+
+              <!-- Audio Playback Preview -->
+              <div id="audioPlaybackPreview" class="hidden flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                <audio controls class="h-8 w-full"></audio>
+                <button type="button" id="btnClearAudio" class="text-xs text-rose-600 hover:text-rose-800 font-bold px-2 py-1">✕</button>
+              </div>
+            </div>
+
+            <!-- Media Evidence Dropzone -->
+            <div class="space-y-2">
+              <div
+                id="mediaDropZone"
+                class="flex flex-col items-center justify-center py-3 px-3 rounded-xl border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50/60 cursor-pointer transition text-center"
+              >
+                <span class="text-base mb-0.5">📸</span>
+                <span class="text-xs font-bold text-slate-700">Upload Photo, Video, or PDF</span>
+                <span class="text-[10px] text-slate-400">Max size 20MB</span>
+              </div>
+              <input type="file" id="evidenceFileInput" class="hidden" accept="image/*,video/*,application/pdf" />
+
+              <!-- File Selected Preview -->
+              <div id="filePreviewContainer" class="hidden flex items-center justify-between bg-blue-50/70 border border-blue-200 p-2.5 rounded-xl text-xs">
+                <div class="flex items-center gap-2 truncate">
+                  <span class="text-blue-600">📎</span>
+                  <span id="fileNameLabel" class="font-bold text-blue-950 truncate max-w-[150px]">file.jpg</span>
+                  <span id="fileSizeLabel" class="text-[10px] text-blue-700 font-mono">1.2 MB</span>
+                </div>
+                <button type="button" id="btnRemoveFile" class="text-slate-400 hover:text-rose-600 font-bold text-sm px-1.5">✕</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Location Picker Bar -->
+          <div class="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-700">Pune Location</span>
+              <button
+                type="button"
+                id="btnGetLocation"
+                class="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800"
+              >
+                <span>📍</span>
+                <span>Locate Me (GPS)</span>
+              </button>
+            </div>
+            <input
+              type="text"
+              id="locationManualInput"
+              readonly
+              class="w-full text-xs font-mono bg-white px-3 py-2 rounded-xl border border-slate-200 text-slate-700 cursor-not-allowed"
+              value="Pune Municipal Corporation (18.5204, 73.8567) - Click map to move pin"
+            />
+          </div>
+
+          <!-- Privacy Consent Checkbox (Safety Requirement) -->
+          <div class="pt-1">
+            <label class="flex items-start gap-2.5 cursor-pointer text-xs text-slate-700">
+              <input type="checkbox" id="consentCheckbox" class="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4" checked />
+              <span>
+                I agree to the <strong>CivicBridge Privacy Shield</strong>. All personal phone numbers, Aadhaar numbers, and vehicle plates will be redacted. Raw media is never stored on disk.
+              </span>
+            </label>
+          </div>
+
+          <!-- Main CTA Submit Button -->
+          <button
+            type="submit"
+            id="btnAnalyze"
+            class="w-full py-3.5 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] transition font-bold text-white text-sm shadow-md flex items-center justify-center gap-2"
+          >
+            <span>✨</span>
+            <span>Analyze & Structure with Gemini</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Right Column: Interactive Pune Map (5 cols) -->
+      <div class="lg:col-span-5 bg-white rounded-3xl border border-slate-200/90 p-5 shadow-sm space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Pune Civic Map</h3>
+            <span class="text-[11px] text-slate-500">Click anywhere to drop complaint pin</span>
+          </div>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono">
+            200m Radius Circle
+          </span>
+        </div>
+
+        <!-- Leaflet Map Container -->
+        <div id="civicMap" class="w-full h-80 sm:h-96 rounded-2xl border border-slate-200 overflow-hidden shadow-inner"></div>
+
+        <!-- Category Filters -->
+        <div class="space-y-1.5 pt-1">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Filter Map Reports</span>
+          <div class="flex flex-wrap gap-1.5">
+            <button type="button" class="category-filter-chip text-[11px] font-medium px-2.5 py-1 rounded-lg bg-slate-900 text-white" data-filter="all">All</button>
+            <button type="button" class="category-filter-chip text-[11px] font-medium px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700" data-filter="Roads">Roads</button>
+            <button type="button" class="category-filter-chip text-[11px] font-medium px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700" data-filter="Drainage">Drainage</button>
+            <button type="button" class="category-filter-chip text-[11px] font-medium px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700" data-filter="Garbage">Waste</button>
+            <button type="button" class="category-filter-chip text-[11px] font-medium px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700" data-filter="Lighting">Lighting</button>
+            <button type="button" class="category-filter-chip text-[11px] font-medium px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700" data-filter="Water">Water</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2, 3, 4, 5: Dynamic Analysis & Action Results Container -->
+    <section id="resultsContainer" class="hidden space-y-6 pt-4">
+      <div class="border-t border-slate-200 pt-6">
+        <h2 class="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+          <span>🎯</span>
+          <span>Verified Civic Intelligence & Action Plan</span>
+        </h2>
+        <p class="text-xs text-slate-500 mt-0.5">
+          Structured by Gemini • Corroborated with PMC spatial registry • Redacted under statutory privacy shield
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <!-- Left: Structured Report & Verification (7 cols) -->
+        <div class="lg:col-span-7 space-y-6">
+          <div id="structuredReportSlot"></div>
+          <div id="verificationSlot"></div>
+        </div>
+
+        <!-- Right: Privacy Shield & Action Plan (5 cols) -->
+        <div class="lg:col-span-5 space-y-6">
+          <div id="privacyShieldSlot"></div>
+          <div id="actionPlanSlot"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="mt-auto border-t border-slate-200 bg-white py-6 px-4 text-center text-xs text-slate-500 space-y-1">
+    <p>CivicBridge Pune • Powered by Google Gemini AI & Model Context Protocol</p>
+    <p class="text-[11px] text-slate-400">Dedicated to transparent, accountable municipal governance across PMC & PCMC.</p>
+  </footer>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
+
+  <!-- Modal: Draft Complaint Letter -->
+  <div id="letterModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 class="text-base font-bold text-slate-900">Formal Grievance Application Draft</h3>
+          <span class="text-xs text-slate-500">Official format addressed to Pune Municipal Ward Officer</span>
+        </div>
+        <button id="btnCloseLetterModal" class="text-slate-400 hover:text-slate-700 font-bold text-lg px-2">✕</button>
+      </div>
+
+      <!-- Language Switcher Tabs -->
+      <div class="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
+        <button class="letter-lang-tab flex-1 py-1.5 rounded-lg bg-white shadow-sm text-blue-600 font-bold" data-lang="en">
+          English
+        </button>
+        <button class="letter-lang-tab flex-1 py-1.5 rounded-lg text-slate-600" data-lang="mr">
+          मराठी (तक्रार अर्ज)
+        </button>
+        <button class="letter-lang-tab flex-1 py-1.5 rounded-lg text-slate-600" data-lang="hi">
+          हिंदी (शिकायत पत्र)
+        </button>
+      </div>
+
+      <div id="letterLoading" class="hidden text-center py-8 text-xs text-blue-600 font-semibold animate-pulse">
+        Drafting official grievance letter in selected language with Gemini...
+      </div>
+
+      <div class="space-y-2 flex-1 overflow-y-auto">
+        <div>
+          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Subject Line</label>
+          <input type="text" id="letterSubject" class="w-full text-xs font-bold text-slate-800 bg-slate-50 p-2.5 rounded-xl border border-slate-200 mt-1" readonly />
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Application Body</label>
+          <textarea id="letterBody" rows="11" class="w-full text-xs font-mono text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200 mt-1 leading-relaxed resize-none focus:outline-none" readonly></textarea>
+        </div>
+      </div>
+
+      <div class="pt-2 flex items-center justify-end gap-3 border-t border-slate-100">
+        <button id="btnCopyLetter" class="py-2.5 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 shadow-sm">
+          <span>📋</span>
+          <span>Copy to Clipboard</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Submission Confirmation Receipt -->
+  <div id="submissionModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 text-center">
+      <div class="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl mx-auto font-bold">
+        ✓
+      </div>
+
+      <div>
+        <h3 class="text-lg font-bold text-slate-900">Grievance Registered with Authority</h3>
+        <p class="text-xs text-slate-500 mt-1">Dispatched to PMC Central Grievance Redressal Cell</p>
+      </div>
+
+      <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-left text-xs">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+          <span class="text-slate-500">Official Tracking Token:</span>
+          <span id="subTrackingId" class="font-mono font-bold text-blue-600 text-sm">PMC-2026-XXXXX</span>
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+          <span class="text-slate-500">Assigned Authority:</span>
+          <span id="subAuthority" class="font-semibold text-slate-800 text-right">PMC Road Dept</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-slate-500">Resolution SLA:</span>
+          <span id="subTargetDate" class="font-semibold text-emerald-700">Within 48 hours</span>
+        </div>
+      </div>
+
+      <button id="btnCloseSubmissionModal" class="w-full py-3 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition">
+        Done & Track Incident
+      </button>
+    </div>
+  </div>
+
+  <!-- Boot ES Module -->
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
