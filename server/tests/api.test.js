@@ -48,6 +48,59 @@ function createMockResponse() {
 }
 
 describe("API Services & Data Integrations", () => {
+  it("applies CORS only to API routes and returns JSON 403 for blocked origins", async () => {
+    const server = app.listen(0);
+    await new Promise((resolve) => server.once("listening", resolve));
+
+    try {
+      const { port } = server.address();
+      const baseUrl = `http://127.0.0.1:${port}`;
+
+      const sameHostOrigin = `http://127.0.0.1:${port}`;
+      const sameHostResponse = await fetch(`${baseUrl}/api/authorities`, {
+        headers: { Origin: sameHostOrigin }
+      });
+      assert.equal(sameHostResponse.status, 200);
+      assert.equal(sameHostResponse.headers.get("access-control-allow-origin"), sameHostOrigin);
+
+      const configuredOriginResponse = await fetch(`${baseUrl}/api/authorities`, {
+        headers: { Origin: "http://localhost:3000" }
+      });
+      assert.equal(configuredOriginResponse.status, 200);
+      assert.equal(configuredOriginResponse.headers.get("access-control-allow-origin"), "http://localhost:3000");
+
+      const blockedResponse = await fetch(`${baseUrl}/api/authorities`, {
+        headers: { Origin: "https://untrusted.example" }
+      });
+      assert.equal(blockedResponse.status, 403);
+      assert.equal(blockedResponse.headers.get("content-type").includes("application/json"), true);
+      assert.equal((await blockedResponse.json()).code, "CORS_ORIGIN_FORBIDDEN");
+
+      const staticResponse = await fetch(`${baseUrl}/js/app.js`, {
+        headers: { Origin: "https://untrusted.example" }
+      });
+      assert.equal(staticResponse.status, 200);
+      assert.equal(staticResponse.headers.get("access-control-allow-origin"), null);
+
+      const noOriginResponse = await fetch(`${baseUrl}/api/authorities`);
+      assert.equal(noOriginResponse.status, 200);
+      assert.equal(noOriginResponse.headers.get("access-control-allow-origin"), null);
+
+      const headersResponse = await fetch(`${baseUrl}/`);
+      const csp = headersResponse.headers.get("content-security-policy");
+      assert.ok(csp.includes("'self'"));
+      assert.ok(csp.includes("https://cdn.tailwindcss.com"));
+      assert.ok(csp.includes("https://unpkg.com"));
+      assert.ok(csp.includes("https://*.tile.openstreetmap.org"));
+      assert.equal(csp.includes("unsafe-eval"), false);
+      assert.equal(headersResponse.headers.get("permissions-policy"), "camera=(self), geolocation=(self), microphone=(self)");
+    } finally {
+      await new Promise((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+      });
+    }
+  });
+
   it("getAuthorities should return full directory with PMC Road, Drainage, Waste, and MSEDCL", async () => {
     const list = await getAuthorities();
     assert.equal(Array.isArray(list), true);
@@ -77,6 +130,9 @@ describe("API Services & Data Integrations", () => {
   });
 
   it("draftComplaintLetter should generate Marathi, Hindi, and English drafts", async () => {
+    const configuredApiKey = process.env.GEMINI_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+
     const sample = {
       category: "Drainage & Sewage",
       subcategory: "Drain Overflow",
@@ -88,22 +144,27 @@ describe("API Services & Data Integrations", () => {
       responsible_authority: "PMC - Drainage & Sewerage Maintenance Department"
     };
 
-    // English
-    const draftEn = await draftComplaintLetter({ report: sample, language: "en" });
-    assert.equal(draftEn.language, "en");
-    assert.equal(draftEn.letterBody.includes("Pune Municipal Corporation"), true);
-    assert.equal(Boolean(draftEn.subject), true);
+    try {
+      const draftEn = await draftComplaintLetter({ report: sample, language: "en" });
+      assert.equal(draftEn.language, "en");
+      assert.equal(draftEn.letterBody.includes("Pune Municipal Corporation"), true);
+      assert.equal(Boolean(draftEn.subject), true);
 
-    // Marathi
-    const draftMr = await draftComplaintLetter({ report: sample, language: "mr" });
-    assert.equal(draftMr.language, "mr");
-    assert.equal(draftMr.letterBody.includes("पुणे महानगरपालिका"), true);
-    assert.equal(draftMr.letterBody.includes("तक्रारदार"), true);
+      const draftMr = await draftComplaintLetter({ report: sample, language: "mr" });
+      assert.equal(draftMr.language, "mr");
+      assert.equal(draftMr.letterBody.includes("पुणे महानगरपालिका"), true);
+      assert.equal(draftMr.letterBody.includes("तक्रारदार"), true);
 
-    // Hindi
-    const draftHi = await draftComplaintLetter({ report: sample, language: "hi" });
-    assert.equal(draftHi.language, "hi");
-    assert.equal(draftHi.letterBody.includes("पुणे नगर निगम"), true);
+      const draftHi = await draftComplaintLetter({ report: sample, language: "hi" });
+      assert.equal(draftHi.language, "hi");
+      assert.equal(draftHi.letterBody.includes("पुणे नगर निगम"), true);
+    } finally {
+      if (configuredApiKey === undefined) {
+        delete process.env.GEMINI_API_KEY;
+      } else {
+        process.env.GEMINI_API_KEY = configuredApiKey;
+      }
+    }
   });
 
   it("should configure Helmet with strict-origin-when-cross-origin referrerPolicy and OSM CSP", async () => {

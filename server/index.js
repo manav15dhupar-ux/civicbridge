@@ -25,6 +25,20 @@ const projectRoot = path.resolve(__dirname, "..");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+function normalizeOrigin(value) {
+  const parsed = new URL(value);
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error(`Invalid allowed origin: ${value}`);
+  }
+  return parsed.origin;
+}
+
+const allowedOrigins = new Set([
+  "http://localhost:3000",
+  ...(process.env.RENDER_EXTERNAL_URL ? [process.env.RENDER_EXTERNAL_URL] : []),
+  ...(process.env.ALLOWED_ORIGINS || "").split(",").map((origin) => origin.trim()).filter(Boolean)
+].map(normalizeOrigin));
+
 /**
  * Configure Helmet with Content Security Policy and Referrer Policy permitting Tailwind CDN,
  * Leaflet maps, and OpenStreetMap tiles.
@@ -39,58 +53,67 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: [
           "'self'",
-          "'unsafe-inline'",
           "https://cdn.tailwindcss.com",
-          "https://unpkg.com",
-          "https://cdnjs.cloudflare.com"
+          "https://unpkg.com"
         ],
         styleSrc: [
           "'self'",
           "'unsafe-inline'",
           "https://cdn.tailwindcss.com",
           "https://unpkg.com",
-          "https://cdnjs.cloudflare.com",
           "https://fonts.googleapis.com"
         ],
-        fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: [
           "'self'",
           "data:",
           "blob:",
-          "https://*.tile.openstreetmap.org",
-          "https://tile.openstreetmap.org",
-          "https://unpkg.com",
-          "https://images.unsplash.com"
+          "https://*.tile.openstreetmap.org"
         ],
-        connectSrc: [
-          "'self'",
-          "https://api.mobbin.com",
-          "https://*.tile.openstreetmap.org",
-          "https://tile.openstreetmap.org"
-        ],
-        mediaSrc: ["'self'", "blob:", "data:"],
+        connectSrc: ["'self'", "blob:"],
+        mediaSrc: ["'self'", "blob:"],
         objectSrc: ["'none'"]
       }
     },
     crossOriginEmbedderPolicy: false
   })
 );
+app.use((req, res, next) => {
+  res.setHeader("Permissions-Policy", "camera=(self), geolocation=(self), microphone=(self)");
+  next();
+});
 
 /**
- * CORS: only allow the configured origin (defaults to same-origin in production).
- * Set ALLOWED_ORIGIN env var to permit a specific front-end domain on Render.
+ * CORS is limited to API routes. The request's own host is always accepted, as are
+ * the configured local, Render, and additional frontend origins.
  */
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "http://localhost:3000";
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (curl, mobile apps, same-origin)
-    if (!origin || origin === ALLOWED_ORIGIN) {
-      return callback(null, true);
+app.use("/api", (req, res, next) => {
+  const origin = req.get("Origin");
+  if (origin) {
+    let normalizedOrigin;
+    try {
+      normalizedOrigin = normalizeOrigin(origin);
+    } catch {
+      return res.status(403).json({
+        success: false,
+        error: "Origin is not allowed.",
+        code: "CORS_ORIGIN_FORBIDDEN"
+      });
     }
-    callback(new Error("Not allowed by CORS"));
-  },
-  credentials: false
-}));
+
+    const requestHost = req.get("host");
+    const isSameHost = requestHost && new URL(normalizedOrigin).host.toLowerCase() === requestHost.toLowerCase();
+    if (!isSameHost && !allowedOrigins.has(normalizedOrigin)) {
+      return res.status(403).json({
+        success: false,
+        error: "Origin is not allowed.",
+        code: "CORS_ORIGIN_FORBIDDEN"
+      });
+    }
+  }
+
+  cors({ origin: origin || false, credentials: false })(req, res, next);
+});
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
