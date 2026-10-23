@@ -152,3 +152,29 @@ body {
   align-items: center;
   justify-content: center;
 }
+
+/* Mobbin Shimmer Animation for Loading & Skeleton States */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite ease-in-out;
+}
+
+/* Stepper Timeline Connectors */
+.step-node-glow {
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
+}
+
+.step-node-glow-success {
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+}
+
+/* Mobile Sticky Action Bar Enhancements */
+.mobile-sticky-bar {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}

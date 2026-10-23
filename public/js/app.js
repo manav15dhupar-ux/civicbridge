@@ -310,15 +310,70 @@ function setupFormListeners() {
         formData.append("audio", state.recordedAudioBlob, "voice-recording.webm");
       }
 
+      // Mobile sticky analyze button sync
+      const btnMobileSticky = document.getElementById("btnMobileStickyAnalyze");
+      const btnMobileStickyText = document.getElementById("btnMobileStickyText");
+
       // UI Loading state
       btnAnalyze.disabled = true;
       btnAnalyze.innerHTML = `
         <span class="inline-block animate-spin mr-2">⟳</span>
         <span>Structuring & Verifying with Gemini...</span>
       `;
+      if (btnMobileSticky) {
+        btnMobileSticky.disabled = true;
+        if (btnMobileStickyText) btnMobileStickyText.textContent = "Structuring with Gemini...";
+      }
+
+      // Show Mobbin Loading Skeleton & Stepper Progress
+      const resultsContainer = document.getElementById("resultsContainer");
+      const skeleton = document.getElementById("analysisLoadingSkeleton");
+      const contentGrid = document.getElementById("resultsContentGrid");
+      const progressBar = document.getElementById("loadingProgressBar");
+      const percentLabel = document.getElementById("loadingPercent");
+
+      if (resultsContainer) resultsContainer.classList.remove("hidden");
+      if (contentGrid) contentGrid.classList.add("hidden");
+      if (skeleton) skeleton.classList.remove("hidden");
+
+      // Animated multi-stage progress ticker
+      let progress = 15;
+      const progressInterval = setInterval(() => {
+        if (progress < 90) {
+          progress += Math.floor(Math.random() * 18 + 8);
+          if (progress > 90) progress = 90;
+          if (progressBar) progressBar.style.width = `${progress}%`;
+          if (percentLabel) percentLabel.textContent = `${progress}%`;
+
+          // Stage state highlights
+          if (progress >= 30) {
+            const stepPrivacy = document.getElementById("stepPrivacy");
+            if (stepPrivacy) stepPrivacy.className = "flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-950";
+          }
+          if (progress >= 60) {
+            const stepGemini = document.getElementById("stepGemini");
+            if (stepGemini) stepGemini.className = "flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-950";
+            const stepSpatial = document.getElementById("stepSpatial");
+            if (stepSpatial) stepSpatial.className = "flex items-center gap-2 p-2.5 rounded-xl bg-blue-50 border border-blue-200 font-bold text-blue-900";
+          }
+          if (progress >= 85) {
+            const stepSpatial = document.getElementById("stepSpatial");
+            if (stepSpatial) stepSpatial.className = "flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-950";
+            const stepAction = document.getElementById("stepAction");
+            if (stepAction) stepAction.className = "flex items-center gap-2 p-2.5 rounded-xl bg-blue-50 border border-blue-200 font-bold text-blue-900";
+          }
+        }
+      }, 350);
+
+      skeleton?.scrollIntoView({ behavior: "smooth", block: "start" });
 
       try {
         const response = await analyzeComplaint(formData);
+        clearInterval(progressInterval);
+
+        if (progressBar) progressBar.style.width = "100%";
+        if (percentLabel) percentLabel.textContent = "100%";
+
         if (response.success && response.data) {
           state.currentAnalysis = response.data;
           renderAnalysisResults(response.data);
@@ -328,13 +383,25 @@ function setupFormListeners() {
           const rep = response.data.structuredReport;
           if (rep && rep.lat && rep.lng) {
             focusCoordinate(rep.lat, rep.lng);
-            setUserLocation(rep.lat, rep.lng);
+            setUserLocation(rep.lat, rep.lng, false, null, true);
           }
 
-          // Smooth scroll to results
-          document.getElementById("resultsContainer")?.scrollIntoView({ behavior: "smooth" });
+          // Reveal content grid and hide skeleton
+          if (skeleton) skeleton.classList.add("hidden");
+          if (contentGrid) contentGrid.classList.remove("hidden");
+
+          // Hide mobile sticky bar after results are shown (results fill the screen)
+          const stickyBar = document.getElementById("mobileStickyBar");
+          if (stickyBar) {
+            stickyBar.classList.add("translate-y-full", "opacity-0", "pointer-events-none");
+          }
+
+          // Smooth scroll to structured results
+          resultsContainer?.scrollIntoView({ behavior: "smooth", block: "start" });
         }
       } catch (err) {
+        clearInterval(progressInterval);
+        if (skeleton) skeleton.classList.add("hidden");
         showToast(err.message || "Failed to process complaint", "error");
       } finally {
         btnAnalyze.disabled = false;
@@ -342,8 +409,20 @@ function setupFormListeners() {
           <span>✨</span>
           <span>Analyze & Structure with Gemini</span>
         `;
+        if (btnMobileSticky) {
+          btnMobileSticky.disabled = false;
+          if (btnMobileStickyText) btnMobileStickyText.textContent = "Analyze with Gemini";
+        }
       }
     });
+
+    // Wire up Mobile Sticky Submit Button
+    const btnMobileSticky = document.getElementById("btnMobileStickyAnalyze");
+    if (btnMobileSticky) {
+      btnMobileSticky.addEventListener("click", () => {
+        form.requestSubmit();
+      });
+    }
   }
 }
 
@@ -402,13 +481,48 @@ function renderAnalysisResults(data) {
  * @param {object} data - Analysis data.
  */
 function attachFilingPanelListeners(data) {
+  // 1-Tap Copy Tracking Token (Mobbin Pattern)
+  const btnCopyToken = document.getElementById("btnCopyTrackingToken");
+  if (btnCopyToken) {
+    btnCopyToken.addEventListener("click", () => {
+      const token = btnCopyToken.dataset.token || document.getElementById("filingTrackingToken")?.textContent || "";
+      if (token) {
+        navigator.clipboard.writeText(token).then(() => {
+          const label = document.getElementById("copyTokenLabel");
+          if (label) label.textContent = "Copied! ✓";
+          btnCopyToken.classList.replace("bg-blue-600", "bg-emerald-600");
+          showToast(`Tracking token ${token} copied to clipboard!`, "success");
+          setTimeout(() => {
+            if (label) label.textContent = "Copy";
+            btnCopyToken.classList.replace("bg-emerald-600", "bg-blue-600");
+          }, 2500);
+        }).catch(() => {
+          showToast("Failed to copy tracking token", "error");
+        });
+      }
+    });
+  }
+
+  // Copy-Ready Grievance Text
   const btnCopy = document.getElementById("btnCopyComplaintText");
   const copyArea = document.getElementById("filingCopyReadyText");
 
   if (btnCopy && copyArea) {
     btnCopy.addEventListener("click", () => {
       navigator.clipboard.writeText(copyArea.value).then(
-        () => showToast("Complaint text copied to clipboard!", "success"),
+        () => {
+          const textSpan = document.getElementById("copyGrievanceText");
+          const iconSpan = document.getElementById("copyGrievanceIcon");
+          if (textSpan) textSpan.textContent = "Copied to Clipboard! ✓";
+          if (iconSpan) iconSpan.textContent = "✓";
+          btnCopy.classList.add("bg-emerald-100", "text-emerald-900", "border-emerald-300");
+          showToast("Grievance text copied to clipboard!", "success");
+          setTimeout(() => {
+            if (textSpan) textSpan.textContent = "Copy Text";
+            if (iconSpan) iconSpan.textContent = "📋";
+            btnCopy.classList.remove("bg-emerald-100", "text-emerald-900", "border-emerald-300");
+          }, 2500);
+        },
         () => showToast("Failed to copy text", "error")
       );
     });
