@@ -22,7 +22,7 @@ export async function extractExifGpsFromBlob(file) {
     const view = new DataView(arrayBuffer);
 
     // Verify JPEG SOI (0xFFD8)
-    if (view.getUint16(0) !== 0xFFD8) {
+    if (view.getUint16(0) !== 0xffd8) {
       return { hasGps: false };
     }
 
@@ -34,7 +34,7 @@ export async function extractExifGpsFromBlob(file) {
       const marker = view.getUint16(offset);
       offset += 2;
 
-      if (marker === 0xFFE1) {
+      if (marker === 0xffe1) {
         // Found APP1!
         const app1Length = view.getUint16(offset);
         const exifStart = offset + 2;
@@ -48,7 +48,7 @@ export async function extractExifGpsFromBlob(file) {
           return parseTiffForGps(view, tiffStart, app1Length);
         }
         break;
-      } else if ((marker & 0xFF00) === 0xFF00) {
+      } else if ((marker & 0xff00) === 0xff00) {
         // Variable-length marker, skip its payload
         const markerLength = view.getUint16(offset);
         offset += markerLength;
@@ -56,8 +56,8 @@ export async function extractExifGpsFromBlob(file) {
         break;
       }
     }
-  } catch (err) {
-    console.debug("EXIF parsing note:", err);
+  } catch {
+    throw new Error("Unable to read GPS metadata from this photo.");
   }
 
   return { hasGps: false };
@@ -76,7 +76,7 @@ function parseTiffForGps(view, tiffStart, maxBytes) {
   const littleEndian = byteOrder === 0x4949;
 
   // Verify TIFF magic 42 (0x002A)
-  if (view.getUint16(tiffStart + 2, littleEndian) !== 0x002A) {
+  if (view.getUint16(tiffStart + 2, littleEndian) !== 0x002a) {
     return { hasGps: false };
   }
 
@@ -129,21 +129,27 @@ function parseTiffForGps(view, tiffStart, maxBytes) {
       latRef = String.fromCharCode(view.getUint8(entryPos + 8));
     } else if (tag === 0x0002) {
       // GPSLatitude (3 rational numbers: degrees, minutes, seconds)
-      const valueOffset = tiffStart + view.getUint32(entryPos + 8, littleEndian);
+      const valueOffset =
+        tiffStart + view.getUint32(entryPos + 8, littleEndian);
       latCoords = readRationals(view, valueOffset, 3, littleEndian);
     } else if (tag === 0x0003) {
       // GPSLongitudeRef ('E' or 'W')
       lngRef = String.fromCharCode(view.getUint8(entryPos + 8));
     } else if (tag === 0x0004) {
       // GPSLongitude (3 rational numbers: degrees, minutes, seconds)
-      const valueOffset = tiffStart + view.getUint32(entryPos + 8, littleEndian);
+      const valueOffset =
+        tiffStart + view.getUint32(entryPos + 8, littleEndian);
       lngCoords = readRationals(view, valueOffset, 3, littleEndian);
     }
   }
 
   if (latCoords && lngCoords) {
-    const lat = (latCoords[0] + latCoords[1] / 60 + latCoords[2] / 3600) * (latRef === "S" ? -1 : 1);
-    const lng = (lngCoords[0] + lngCoords[1] / 60 + lngCoords[2] / 3600) * (lngRef === "W" ? -1 : 1);
+    const lat =
+      (latCoords[0] + latCoords[1] / 60 + latCoords[2] / 3600) *
+      (latRef === "S" ? -1 : 1);
+    const lng =
+      (lngCoords[0] + lngCoords[1] / 60 + lngCoords[2] / 3600) *
+      (lngRef === "W" ? -1 : 1);
 
     if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
       return {

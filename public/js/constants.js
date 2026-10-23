@@ -1,0 +1,5 @@
+export const MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024;
+export const BYTES_PER_KILOBYTE = 1024;
+export const BYTES_PER_MEGABYTE = 1024 * 1024;
+export const GPS_ACCURACY_WARNING_METERS = 50;
+export const LOCATION_REQUEST_TIMEOUT_MS = 12 * 1000;

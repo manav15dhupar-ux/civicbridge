@@ -2,28 +2,14 @@
  * @fileoverview Geographic utility functions for distance calculations and Pune coordinate validations.
  */
 
+import { EARTH_RADIUS_METERS, PUNE_BOUNDS } from "../config/constants.js";
+
+export { PUNE_BOUNDS } from "../config/constants.js";
+
 /**
  * Earth radius in meters.
  * @constant {number}
  */
-const EARTH_RADIUS_METERS = 6371000;
-
-/**
- * Pune Municipal geographic bounding box coordinates for sanity checks.
- * @constant {object}
- */
-export const PUNE_BOUNDS = {
-  minLat: 18.35,
-  maxLat: 18.75,
-  minLng: 73.65,
-  maxLng: 74.05,
-  center: {
-    lat: 18.5204,
-    lng: 73.8567,
-    name: "Pune Municipal Corporation (PMC), Shivajinagar"
-  }
-};
-
 /**
  * Converts degrees to radians.
  * @param {number} degrees - Angle in degrees.
@@ -63,7 +49,10 @@ export function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
 
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(radLat1) * Math.cos(radLat2);
+    Math.sin(dLon / 2) *
+      Math.sin(dLon / 2) *
+      Math.cos(radLat1) *
+      Math.cos(radLat2);
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 

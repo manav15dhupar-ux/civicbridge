@@ -4,6 +4,7 @@
 
 import express from "express";
 import { getAuthorities } from "../services/actionPlanService.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
 const router = express.Router();
 
@@ -11,25 +12,25 @@ const router = express.Router();
  * GET /api/authorities
  * Returns full registry of municipal and state civic authorities in Pune.
  */
-router.get("/", async (req, res, next) => {
-  try {
+router.get(
+  "/",
+  asyncHandler(async (req, res) => {
     const authorities = await getAuthorities();
     return res.json({
       success: true,
       count: authorities.length,
       data: authorities
     });
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
 /**
  * GET /api/authorities/:id
  * Returns a specific authority by ID.
  */
-router.get("/:id", async (req, res, next) => {
-  try {
+router.get(
+  "/:id",
+  asyncHandler(async (req, res) => {
     const authorities = await getAuthorities();
     const found = authorities.find((a) => a.id === req.params.id);
     if (!found) {
@@ -42,9 +43,7 @@ router.get("/:id", async (req, res, next) => {
       success: true,
       data: found
     });
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
 export default router;

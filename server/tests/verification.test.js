@@ -6,24 +6,37 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { calculateHaversineDistance, isWithinPune } from "../utils/geo.js";
 import { verifyComplaint } from "../services/verificationService.js";
-import { generateActionPlan, matchAuthority } from "../services/actionPlanService.js";
+import {
+  generateActionPlan,
+  matchAuthority
+} from "../services/actionPlanService.js";
 
 describe("Geographic Utilities", () => {
   it("should accurately calculate Haversine distance in meters", () => {
     // Distance between PMC Main Building (18.5204, 73.8567) and FC Road (18.5284, 73.8423) is ~1.76 km (~1760 m)
-    const distance = calculateHaversineDistance(18.5204, 73.8567, 18.5284, 73.8423);
+    const distance = calculateHaversineDistance(
+      18.5204,
+      73.8567,
+      18.5284,
+      73.8423
+    );
     assert.equal(distance > 1500 && distance < 2000, true);
   });
 
   it("should return 0 meters for identical coordinates", () => {
-    const distance = calculateHaversineDistance(18.5074, 73.8077, 18.5074, 73.8077);
+    const distance = calculateHaversineDistance(
+      18.5074,
+      73.8077,
+      18.5074,
+      73.8077
+    );
     assert.equal(distance, 0);
   });
 
   it("should validate coordinates within Pune municipal boundaries", () => {
     assert.equal(isWithinPune(18.5204, 73.8567), true); // Pune Shivajinagar
-    assert.equal(isWithinPune(19.0760, 72.8777), false); // Mumbai (Outside Pune)
-    assert.equal(isWithinPune(28.6139, 77.2090), false); // Delhi (Outside Pune)
+    assert.equal(isWithinPune(19.076, 72.8777), false); // Mumbai (Outside Pune)
+    assert.equal(isWithinPune(28.6139, 77.209), false); // Delhi (Outside Pune)
   });
 });
 
@@ -34,7 +47,8 @@ describe("Verification Engine", () => {
       category: "Drainage & Sewage",
       subcategory: "Drain Overflow",
       severity: 4,
-      description: "Overflowing gutter sewage water near Karve statue bus stop.",
+      description:
+        "Overflowing gutter sewage water near Karve statue bus stop.",
       lat: 18.5076,
       lng: 73.8079
     };
@@ -55,8 +69,8 @@ describe("Verification Engine", () => {
       subcategory: "Pipeline Leakage",
       severity: 3,
       description: "Water pipe leaking in isolated area.",
-      lat: 18.4100,
-      lng: 73.7200
+      lat: 18.41,
+      lng: 73.72
     };
 
     const verification = await verifyComplaint(candidate);
@@ -86,7 +100,7 @@ describe("Authority Registry & Action Planner", () => {
       severity: 4,
       description: "Severe pothole on Baner High Street.",
       location_text: "Baner High Street, Baner, Pune",
-      lat: 18.5590,
+      lat: 18.559,
       lng: 73.7868,
       urgency_reason: "High accident risk for two-wheelers.",
       responsible_authority: "Pune Municipal Corporation - Road Department"

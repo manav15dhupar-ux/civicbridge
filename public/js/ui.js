@@ -23,12 +23,71 @@ export function escapeHtml(value) {
  * Severity configuration styling.
  */
 export const SEVERITY_CONFIG = {
-  1: { label: "1 - Low", color: "bg-slate-100 text-slate-700 border-slate-300", dot: "bg-slate-400" },
-  2: { label: "2 - Minor", color: "bg-blue-50 text-blue-700 border-blue-300", dot: "bg-blue-500" },
-  3: { label: "3 - Moderate", color: "bg-amber-50 text-amber-700 border-amber-300", dot: "bg-amber-500" },
-  4: { label: "4 - High Hazard", color: "bg-orange-50 text-orange-700 border-orange-300", dot: "bg-orange-500" },
-  5: { label: "5 - Critical Emergency", color: "bg-rose-50 text-rose-700 border-rose-300", dot: "bg-rose-600 animate-pulse" }
+  1: {
+    label: "1 - Low",
+    color: "bg-slate-100 text-slate-700 border-slate-300",
+    dot: "bg-slate-400"
+  },
+  2: {
+    label: "2 - Minor",
+    color: "bg-blue-50 text-blue-700 border-blue-300",
+    dot: "bg-blue-500"
+  },
+  3: {
+    label: "3 - Moderate",
+    color: "bg-amber-50 text-amber-700 border-amber-300",
+    dot: "bg-amber-500"
+  },
+  4: {
+    label: "4 - High Hazard",
+    color: "bg-orange-50 text-orange-700 border-orange-300",
+    dot: "bg-orange-500"
+  },
+  5: {
+    label: "5 - Critical Emergency",
+    color: "bg-rose-50 text-rose-700 border-rose-300",
+    dot: "bg-rose-600 animate-pulse"
+  }
 };
+
+/**
+ * Renders the immediate safety warning and prioritized emergency contacts.
+ * @param {object|null} hazardTriage - Hazard safety and routing information.
+ * @returns {string} Accessible alert markup, or an empty string when no urgent hazard was found.
+ */
+export function renderImmediateSafetyCard(hazardTriage) {
+  if (!hazardTriage) return "";
+
+  const contacts = (hazardTriage.emergencyContacts || [])
+    .map((contact) => {
+      const number = String(contact.number || "").replace(/[^0-9+]/g, "");
+      return `
+        <a
+          href="tel:${escapeHtml(number)}"
+          aria-label="Call ${escapeHtml(contact.name)} at ${escapeHtml(contact.number)}"
+          class="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-300 bg-white px-4 py-2 text-sm font-bold text-red-900 hover:bg-red-50"
+        >
+          Call ${escapeHtml(contact.name)}: ${escapeHtml(contact.number)}
+        </a>
+      `;
+    })
+    .join("");
+
+  return `
+    <section role="alert" aria-labelledby="immediateSafetyTitle" class="mb-4 space-y-3 rounded-2xl border-2 border-red-600 bg-red-50 p-5 text-red-950 shadow-sm">
+      <div>
+        <p class="text-xs font-black uppercase tracking-widest text-red-800">Critical life-safety hazard</p>
+        <h2 id="immediateSafetyTitle" class="mt-1 text-lg font-black">Immediate safety advice</h2>
+        <p class="mt-1 text-sm font-semibold">${escapeHtml(hazardTriage.label)}</p>
+      </div>
+      <ul class="list-disc space-y-1 pl-5 text-sm">
+        ${(hazardTriage.safetyAdvice || []).map((advice) => `<li>${escapeHtml(advice)}</li>`).join("")}
+      </ul>
+      <div class="flex flex-wrap gap-2">${contacts}</div>
+      <p class="text-xs font-semibold text-red-900">${escapeHtml(hazardTriage.priorityRouting)}</p>
+    </section>
+  `;
+}
 
 /**
  * Displays a non-intrusive toast notification.
@@ -122,7 +181,9 @@ export function renderStructuredCard(report) {
         </div>
       </div>
 
-      ${report.urgency_reason ? `
+      ${
+        report.urgency_reason
+          ? `
         <div class="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/90 text-xs text-amber-950 flex items-start gap-2.5">
           <span class="text-amber-600 font-bold text-sm">⚠️</span>
           <div>
@@ -130,9 +191,13 @@ export function renderStructuredCard(report) {
             <span class="text-amber-800 leading-relaxed">${escapeHtml(report.urgency_reason)}</span>
           </div>
         </div>
-      ` : ""}
+      `
+          : ""
+      }
 
-      ${report.evidence_summary ? `
+      ${
+        report.evidence_summary
+          ? `
         <div class="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 text-xs text-blue-950 flex items-start gap-2.5">
           <span class="text-blue-600 font-bold text-sm">📸</span>
           <div>
@@ -140,7 +205,9 @@ export function renderStructuredCard(report) {
             <span class="text-blue-800 leading-relaxed">${escapeHtml(report.evidence_summary)}</span>
           </div>
         </div>
-      ` : ""}
+      `
+          : ""
+      }
     </div>
   `;
 }
@@ -155,17 +222,20 @@ export function renderVerificationCard(verification) {
   const scoreBadgeColor = isHigh
     ? "bg-emerald-600 text-white"
     : verification.verificationScore >= 50
-    ? "bg-blue-600 text-white"
-    : "bg-amber-500 text-white";
+      ? "bg-blue-600 text-white"
+      : "bg-amber-500 text-white";
 
-  const matchesHtml = verification.matches && verification.matches.length > 0
-    ? `
+  const matchesHtml =
+    verification.matches && verification.matches.length > 0
+      ? `
       <div class="mt-3 pt-3 border-t border-slate-100 space-y-2">
         <span class="text-xs font-bold text-slate-700 uppercase tracking-wide block">
           Matching Civic Complaints Within 200m (${escapeHtml(verification.matches.length)})
         </span>
         <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
-          ${verification.matches.map((m) => `
+          ${verification.matches
+            .map(
+              (m) => `
             <div class="p-3 rounded-2xl border border-slate-200/90 bg-slate-50/60 flex items-center justify-between text-xs hover:bg-white transition">
               <div>
                 <div class="font-bold text-slate-800 flex items-center gap-1.5">
@@ -177,16 +247,20 @@ export function renderVerificationCard(verification) {
                 </div>
               </div>
               <span class="px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                m.status === 'Resolved' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                m.status === "Resolved"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-blue-100 text-blue-800"
               }">
                 ${escapeHtml(m.status)}
               </span>
             </div>
-          `).join("")}
+          `
+            )
+            .join("")}
         </div>
       </div>
     `
-    : `
+      : `
       <!-- Mobbin Pioneer Banner for New Report Zone -->
       <div class="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 flex items-center gap-3">
         <div class="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
@@ -215,15 +289,17 @@ export function renderVerificationCard(verification) {
       </div>
 
       <!-- Reporter Consensus Banner -->
-      <div class="p-4 rounded-2xl ${verification.otherReportersCount > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-blue-50 border border-blue-200'} flex items-center gap-3.5">
-        <div class="w-10 h-10 rounded-2xl ${verification.otherReportersCount > 0 ? 'bg-amber-500 text-white' : 'bg-blue-600 text-white'} flex items-center justify-center font-extrabold text-base shrink-0 shadow-sm">
+      <div class="p-4 rounded-2xl ${verification.otherReportersCount > 0 ? "bg-amber-50 border border-amber-200" : "bg-blue-50 border border-blue-200"} flex items-center gap-3.5">
+        <div class="w-10 h-10 rounded-2xl ${verification.otherReportersCount > 0 ? "bg-amber-500 text-white" : "bg-blue-600 text-white"} flex items-center justify-center font-extrabold text-base shrink-0 shadow-sm">
           ${verification.otherReportersCount > 0 ? verification.otherReportersCount : "1"}
         </div>
         <div class="text-xs">
           <span class="font-extrabold text-slate-900 block text-sm">
-            ${verification.otherReportersCount > 0
-              ? `${escapeHtml(verification.otherReportersCount)} other citizens reported this issue nearby`
-              : "Single-source new incident report"}
+            ${
+              verification.otherReportersCount > 0
+                ? `${escapeHtml(verification.otherReportersCount)} other citizens reported this issue nearby`
+                : "Single-source new incident report"
+            }
           </span>
           <span class="text-slate-600 mt-0.5">${escapeHtml(verification.reason)}</span>
         </div>
@@ -270,11 +346,15 @@ export function renderPrivacyShieldCard(privacyShield) {
         </div>
       </div>
 
-      ${logs.length > 0 ? `
+      ${
+        logs.length > 0
+          ? `
         <div class="space-y-1.5 pt-1">
           <span class="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">Redaction Audit Trail</span>
           <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-            ${logs.map((item) => `
+            ${logs
+              .map(
+                (item) => `
               <div class="text-xs bg-white/5 rounded-xl p-2.5 border border-white/10 flex items-center justify-between">
                 <div>
                   <span class="text-[10px] text-slate-400 uppercase tracking-wide block">${escapeHtml(item.type)}</span>
@@ -282,15 +362,19 @@ export function renderPrivacyShieldCard(privacyShield) {
                 </div>
                 <span class="text-[10px] text-slate-400">Scrubbed</span>
               </div>
-            `).join("")}
+            `
+              )
+              .join("")}
           </div>
         </div>
-      ` : `
+      `
+          : `
         <div class="text-xs text-slate-300 bg-white/5 p-3 rounded-2xl border border-white/10 flex items-center gap-2">
           <span>✓</span>
           <span>No sensitive phone numbers, Aadhaar cards, or personal names detected in complaint text.</span>
         </div>
-      `}
+      `
+      }
 
       <div class="text-[11px] text-slate-400 flex items-center gap-1.5 pt-1 border-t border-white/10">
         <span>🔒</span>
@@ -307,7 +391,10 @@ export function renderPrivacyShieldCard(privacyShield) {
  */
 export function renderActionPlanCard(actionPlan) {
   const auth = actionPlan.authority || {};
-  const timeline = actionPlan.expectedTimeline || { slaHours: 48, label: "Statutory 48h Resolution" };
+  const timeline = actionPlan.expectedTimeline || {
+    slaHours: 48,
+    label: "Statutory 48h Resolution"
+  };
 
   return `
     <div class="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-7 shadow-sm space-y-6">
@@ -337,20 +424,20 @@ export function renderActionPlanCard(actionPlan) {
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-slate-200/70">
           <a
-            href="tel:${(auth.helpline || '18001030222').replace(/[^0-9]/g, '')}"
+            href="tel:${(auth.helpline || "18001030222").replace(/[^0-9]/g, "")}"
             class="min-h-[44px] flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-blue-400 active:scale-[0.98] transition text-slate-700 shadow-2xs font-semibold text-xs"
           >
             <span class="text-base">📞</span>
-            <span class="truncate">Helpline: <strong class="font-bold text-slate-900">${escapeHtml(auth.helpline || '1800 1030 222')}</strong></span>
+            <span class="truncate">Helpline: <strong class="font-bold text-slate-900">${escapeHtml(auth.helpline || "1800 1030 222")}</strong></span>
           </a>
           <a
-            href="${auth.portalUrl || 'https://complaint.punecorporation.org/'}"
+            href="${auth.portalUrl || "https://complaint.punecorporation.org/"}"
             target="_blank"
             rel="noopener noreferrer"
             class="min-h-[44px] flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 hover:border-blue-400 active:scale-[0.98] transition text-slate-700 shadow-2xs font-semibold text-xs"
           >
             <span class="text-base">🌐</span>
-            <span class="truncate">Portal: <strong class="font-bold text-slate-900">${escapeHtml(auth.portalName || 'PMC Care Portal')}</strong></span>
+            <span class="truncate">Portal: <strong class="font-bold text-slate-900">${escapeHtml(auth.portalName || "PMC Care Portal")}</strong></span>
           </a>
         </div>
       </div>
@@ -359,7 +446,9 @@ export function renderActionPlanCard(actionPlan) {
       <div class="space-y-3">
         <h4 class="text-xs font-black text-slate-700 uppercase tracking-wider">Four-Stage Redressal Process</h4>
         <div class="relative pl-6 space-y-4 before:content-[''] before:absolute before:left-3 before:top-3 before:bottom-3 before:w-0.5 before:bg-blue-200">
-          ${(actionPlan.phases || []).map((phase, idx) => `
+          ${(actionPlan.phases || [])
+            .map(
+              (phase, idx) => `
             <div class="relative flex items-start gap-3.5">
               <!-- Step Circle Node -->
               <div class="absolute -left-6 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs ring-4 ring-white shadow-sm shrink-0">
@@ -377,7 +466,9 @@ export function renderActionPlanCard(actionPlan) {
                 </div>
               </div>
             </div>
-          `).join("")}
+          `
+            )
+            .join("")}
         </div>
       </div>
 
@@ -392,7 +483,7 @@ export function renderActionPlanCard(actionPlan) {
             Submit directly via the PMC Care Portal or mobile app. The AI structured grievance and location will expedite ticket categorization.
           </p>
           <a
-            href="${auth.portalUrl || 'https://complaint.punecorporation.org/'}"
+            href="${auth.portalUrl || "https://complaint.punecorporation.org/"}"
             target="_blank"
             rel="noopener noreferrer"
             class="min-h-[44px] inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-[0.98] font-bold text-xs text-white transition shadow-sm cursor-pointer"
@@ -422,7 +513,9 @@ export function renderActionPlanCard(actionPlan) {
       </div>
 
       <!-- Community Mobilization Banner -->
-      ${actionPlan.communityEscalation ? `
+      ${
+        actionPlan.communityEscalation
+          ? `
         <div class="p-4 rounded-2xl bg-slate-900 text-white flex items-center justify-between gap-3 text-xs">
           <div>
             <strong class="font-bold text-slate-100 block">Civic Escalation Tip</strong>
@@ -436,7 +529,9 @@ export function renderActionPlanCard(actionPlan) {
             Share Plan
           </button>
         </div>
-      ` : ""}
+      `
+          : ""
+      }
     </div>
   `;
 }
@@ -453,35 +548,65 @@ export function renderFileComplaintPanel(data) {
   const timeline = data.statusTimeline || {
     currentStage: "Forwarded",
     stages: [
-      { id: "submitted", name: "Submitted", status: "completed", timestamp: "Completed", description: "Complaint registered" },
-      { id: "verified", name: "Verified", status: "completed", timestamp: "Completed", description: "AI & spatial verified" },
-      { id: "forwarded", name: "Forwarded", status: "active", timestamp: "In Progress", description: "Dispatched to Ward Junior Engineer" },
-      { id: "resolved", name: "Resolved", status: "pending", timestamp: `Within ${auth.slaHours || 48}h`, description: "Resolution verification & sign-off" }
+      {
+        id: "submitted",
+        name: "Submitted",
+        status: "completed",
+        timestamp: "Completed",
+        description: "Complaint registered"
+      },
+      {
+        id: "verified",
+        name: "Verified",
+        status: "completed",
+        timestamp: "Completed",
+        description: "AI & spatial verified"
+      },
+      {
+        id: "forwarded",
+        name: "Forwarded",
+        status: "active",
+        timestamp: "In Progress",
+        description: "Dispatched to Ward Junior Engineer"
+      },
+      {
+        id: "resolved",
+        name: "Resolved",
+        status: "pending",
+        timestamp: `Within ${auth.slaHours || 48}h`,
+        description: "Resolution verification & sign-off"
+      }
     ]
   };
 
-  const offline = data.offlineRoute || data.offlineGuide || auth.offlineGuide || {
-    officeName: auth.name,
-    officeAddress: auth.officeAddress || "PMC Main Building, Shivajinagar, Pune",
-    documentsToCarry: [
-      "2 printed color photographs of defect",
-      "Formal grievance application letter",
-      "Government photo ID for visitor register"
-    ],
-    bestTimeToVisit: "10:30 AM - 1:00 PM (Monday to Friday)",
-    whatToSay: "I am registering an urgent civic defect at this location under statutory PMC SLAs."
-  };
+  const offline = data.offlineRoute ||
+    data.offlineGuide ||
+    auth.offlineGuide || {
+      officeName: auth.name,
+      officeAddress:
+        auth.officeAddress || "PMC Main Building, Shivajinagar, Pune",
+      documentsToCarry: [
+        "2 printed color photographs of defect",
+        "Formal grievance application letter",
+        "Government photo ID for visitor register"
+      ],
+      bestTimeToVisit: "10:30 AM - 1:00 PM (Monday to Friday)",
+      whatToSay:
+        "I am registering an urgent civic defect at this location under statutory PMC SLAs."
+    };
 
   const copyText = data.onlineRoute?.copyReadyText || data.copyReadyText || "";
   const portalUrl = auth.portalUrl || "https://complaint.punecorporation.org/";
   const portalName = auth.portalName || "PMC Care Portal";
 
-  const share = data.shareRoutes || data.shareLinks || {
-    whatsappUrl: `https://wa.me/?text=${encodeURIComponent(copyText)}`,
-    emailUrl: `mailto:${auth.email || 'pmccare@punecorporation.org'}?subject=${encodeURIComponent('URGENT: Civic Grievance')}&body=${encodeURIComponent(copyText)}`
-  };
+  const share = data.shareRoutes ||
+    data.shareLinks || {
+      whatsappUrl: `https://wa.me/?text=${encodeURIComponent(copyText)}`,
+      emailUrl: `mailto:${auth.email || "pmccare@punecorporation.org"}?subject=${encodeURIComponent("URGENT: Civic Grievance")}&body=${encodeURIComponent(copyText)}`
+    };
 
-  const trackingId = data.trackingId || data.initialTrackingId || "PMC-2026-PENDING";
+  const trackingId =
+    data.trackingId || data.initialTrackingId || "PMC-2026-PENDING";
   const isFiled = Boolean(data.isFiled);
 
   return `
@@ -491,7 +616,7 @@ export function renderFileComplaintPanel(data) {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
         <div>
           <div class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full ${isFiled ? 'bg-emerald-500 animate-pulse' : 'bg-blue-600'}"></span>
+            <span class="w-2.5 h-2.5 rounded-full ${isFiled ? "bg-emerald-500 animate-pulse" : "bg-blue-600"}"></span>
             <span class="text-xs font-black uppercase tracking-wider text-blue-600">Step 5: File This Complaint</span>
           </div>
           <h3 class="text-xl sm:text-2xl font-black text-slate-900 mt-1">Official Municipal Filing Hub</h3>
@@ -524,33 +649,43 @@ export function renderFileComplaintPanel(data) {
         <div class="flex items-center justify-between">
           <h4 class="text-xs font-black text-slate-700 uppercase tracking-wider">Live Grievance Lifecycle</h4>
           <span class="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-            ${isFiled ? 'Active & Dispatched' : 'Ready for Submission'}
+            ${isFiled ? "Active & Dispatched" : "Ready for Submission"}
           </span>
         </div>
 
         <!-- Stepper Node Grid -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 pt-2">
-          ${timeline.stages.map((stage, idx) => {
-            const isCompleted = stage.status === "completed" || (isFiled && (stage.id === "submitted" || stage.id === "verified"));
-            const isActive = stage.status === "active" || (isFiled && stage.id === "forwarded");
-            const nodeClass = isCompleted
-              ? "bg-emerald-50 border-emerald-200 text-emerald-950 step-node-glow-success"
-              : isActive
-              ? "bg-blue-50 border-blue-300 text-blue-950 step-node-glow"
-              : "bg-white border-slate-200 text-slate-400";
+          ${timeline.stages
+            .map((stage, idx) => {
+              const isCompleted =
+                stage.status === "completed" ||
+                (isFiled &&
+                  (stage.id === "submitted" || stage.id === "verified"));
+              const isActive =
+                stage.status === "active" ||
+                (isFiled && stage.id === "forwarded");
+              const nodeClass = isCompleted
+                ? "bg-emerald-50 border-emerald-200 text-emerald-950 step-node-glow-success"
+                : isActive
+                  ? "bg-blue-50 border-blue-300 text-blue-950 step-node-glow"
+                  : "bg-white border-slate-200 text-slate-400";
 
-            const icon = isCompleted
-              ? "✓"
-              : isActive
-              ? "⚡"
-              : String(idx + 1);
+              const icon = isCompleted
+                ? "✓"
+                : isActive
+                  ? "⚡"
+                  : String(idx + 1);
 
-            return `
+              return `
               <div class="p-3 sm:p-3.5 rounded-2xl border ${nodeClass} transition-all duration-300 flex flex-col justify-between">
                 <div>
                   <div class="flex items-center justify-between mb-1.5">
                     <span class="w-6 h-6 rounded-full flex items-center justify-center font-black text-xs ${
-                      isCompleted ? 'bg-emerald-600 text-white' : isActive ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'
+                      isCompleted
+                        ? "bg-emerald-600 text-white"
+                        : isActive
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-200 text-slate-600"
                     }">${icon}</span>
                     <span class="text-[10px] font-mono font-bold opacity-75">${escapeHtml(stage.timestamp || "")}</span>
                   </div>
@@ -559,7 +694,8 @@ export function renderFileComplaintPanel(data) {
                 <p class="text-[10px] opacity-80 mt-1 leading-snug line-clamp-2">${escapeHtml(stage.description || "")}</p>
               </div>
             `;
-          }).join("")}
+            })
+            .join("")}
         </div>
       </div>
 
@@ -638,11 +774,15 @@ export function renderFileComplaintPanel(data) {
             <div class="bg-white/80 p-2.5 rounded-xl border border-amber-200/80 text-xs">
               <span class="font-bold text-slate-700 block text-[11px] mb-1">Documents to Carry:</span>
               <ul class="list-disc list-inside space-y-0.5 text-[11px] text-slate-600 font-medium">
-                ${(offline.documentsToCarry || [
-                  "2 printed color photographs showing defect",
-                  "Printed formal grievance application letter",
-                  "Government photo ID for visitor register"
-                ]).map((doc) => `<li>${escapeHtml(doc)}</li>`).join("")}
+                ${(
+                  offline.documentsToCarry || [
+                    "2 printed color photographs showing defect",
+                    "Printed formal grievance application letter",
+                    "Government photo ID for visitor register"
+                  ]
+                )
+                  .map((doc) => `<li>${escapeHtml(doc)}</li>`)
+                  .join("")}
               </ul>
             </div>
           </div>
@@ -692,12 +832,12 @@ export function renderFileComplaintPanel(data) {
           id="btnExecuteFiling"
           class="w-full min-h-[52px] py-4 px-6 rounded-2xl font-black text-sm text-white transition shadow-lg flex items-center justify-center gap-2 cursor-pointer ${
             isFiled
-              ? 'bg-emerald-600 hover:bg-emerald-700 cursor-default'
-              : 'bg-blue-600 hover:bg-blue-700 active:scale-[0.98]'
+              ? "bg-emerald-600 hover:bg-emerald-700 cursor-default"
+              : "bg-blue-600 hover:bg-blue-700 active:scale-[0.98]"
           }"
         >
-          <span class="text-base">${isFiled ? '✓' : '🚀'}</span>
-          <span>${isFiled ? `Grievance Dispatched & Logged (#${escapeHtml(trackingId)})` : 'File This Complaint & Generate Tracking Token'}</span>
+          <span class="text-base">${isFiled ? "✓" : "🚀"}</span>
+          <span>${isFiled ? `Grievance Dispatched & Logged (#${escapeHtml(trackingId)})` : "File This Complaint & Generate Tracking Token"}</span>
         </button>
       </div>
 

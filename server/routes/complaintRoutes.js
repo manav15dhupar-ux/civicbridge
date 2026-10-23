@@ -7,13 +7,26 @@ import express from "express";
 import multer from "multer";
 import {
   validateComplaintInput,
-  MAX_FILE_SIZE_BYTES,
   DraftLetterRequestSchema,
   FileComplaintRequestSchema
 } from "../utils/validators.js";
-import { redactSensitiveData, scrubRawMediaBuffer } from "../services/redactService.js";
-import { analyzeWithGemini, draftComplaintLetter, GeminiServiceError } from "../services/geminiService.js";
-import { verifyComplaint, getExistingReports, appendReport } from "../services/verificationService.js";
+import { MAX_FILE_SIZE_BYTES } from "../config/constants.js";
+import { DEFAULT_SLA_HOURS } from "../config/constants.js";
+import { applyUrgentHazardTriage } from "../services/hazardTriageService.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import {
+  redactSensitiveData,
+  scrubRawMediaBuffer
+} from "../services/redactService.js";
+import {
+  analyzeWithGemini,
+  draftComplaintLetter
+} from "../services/geminiService.js";
+import {
+  verifyComplaint,
+  getExistingReports,
+  appendReport
+} from "../services/verificationService.js";
 import {
   generateActionPlan,
   matchAuthority,
@@ -47,8 +60,10 @@ const complaintUploadMiddleware = upload.fields([
  * Ingests raw complaint inputs, enforces privacy redaction, structures with Gemini,
  * verifies against local reports, and builds a civic action plan.
  */
-router.post("/analyze", complaintUploadMiddleware, async (req, res, next) => {
-  try {
+router.post(
+  "/analyze",
+  complaintUploadMiddleware,
+  asyncHandler(async (req, res) => {
     const rawText = req.body.text || "";
     const userLat = req.body.lat ? parseFloat(req.body.lat) : undefined;
     const userLng = req.body.lng ? parseFloat(req.body.lng) : undefined;
@@ -56,10 +71,21 @@ router.post("/analyze", complaintUploadMiddleware, async (req, res, next) => {
     const consent = req.body.consent;
 
     const file = req.files && req.files.file ? req.files.file[0] : undefined;
-    const audioFile = req.files && req.files.audio ? req.files.audio[0] : undefined;
+    const audioFile =
+      req.files && req.files.audio ? req.files.audio[0] : undefined;
 
     // 1. Input Validation
-    const validation = validateComplaintInput({ text: rawText, consent, lat: userLat, lng: userLng, location_text: locationText }, file, audioFile);
+    const validation = validateComplaintInput(
+      {
+        text: rawText,
+        consent,
+        lat: userLat,
+        lng: userLng,
+        location_text: locationText
+      },
+      file,
+      audioFile
+    );
     if (!validation.valid) {
       return res.status(400).json({
         success: false,
@@ -68,10 +94,11 @@ router.post("/analyze", complaintUploadMiddleware, async (req, res, next) => {
     }
 
     // 2. Privacy Shield: Redact PII (Aadhaar, Phone, Email, Vehicle Plates, Names)
-    const { cleanedText, redactionCounts, redactionLog } = redactSensitiveData(rawText);
+    const { cleanedText, redactionCounts, redactionLog } =
+      redactSensitiveData(rawText);
 
     // 3. AI Structuring with Gemini (strict JSON schema)
-    const structuredReport = await analyzeWithGemini({
+    const analyzedReport = await analyzeWithGemini({
       text: cleanedText,
       file,
       audioFile,
@@ -80,11 +107,16 @@ router.post("/analyze", complaintUploadMiddleware, async (req, res, next) => {
       locationText
     });
 
+    const { structuredReport, hazardTriage } = applyUrgentHazardTriage(
+      analyzedReport,
+      cleanedText
+    );
+
     // 4. Verification against existing reports in Pune (<200m Haversine + Similarity)
     const verification = await verifyComplaint(structuredReport);
 
     // 5. Action Plan Generation
-    const actionPlan = await generateActionPlan(structuredReport);
+    const actionPlan = await generateActionPlan(structuredReport, hazardTriage);
 
     // 6. Zero-retention policy: wipe memory buffers
     scrubRawMediaBuffer(file);
@@ -96,6 +128,7 @@ router.post("/analyze", complaintUploadMiddleware, async (req, res, next) => {
         structuredReport,
         verification,
         actionPlan,
+        hazardTriage,
         privacyShield: {
           redactionLog,
           itemsRedactedCount: redactionCounts.total,
@@ -105,29 +138,23 @@ router.post("/analyze", complaintUploadMiddleware, async (req, res, next) => {
         }
       }
     });
-  } catch (error) {
-    if (error instanceof GeminiServiceError || error.isUserFacing) {
-      return res.status(error.status || 500).json({
-        success: false,
-        error: error.userMessage || error.message,
-        code: error.code || "AI_ANALYSIS_FAILED"
-      });
-    }
-    next(error);
-  }
-});
+  })
+);
 
 /**
  * POST /api/complaints/draft-letter
  * Generates formal civic grievance letters in English, Marathi, or Hindi.
  */
-router.post("/draft-letter", async (req, res, next) => {
-  try {
+router.post(
+  "/draft-letter",
+  asyncHandler(async (req, res) => {
     const parsed = DraftLetterRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
         success: false,
-        errors: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`)
+        errors: parsed.error.issues.map(
+          (i) => `${i.path.join(".")}: ${i.message}`
+        )
       });
     }
     const { report, language } = parsed.data;
@@ -137,10 +164,8 @@ router.post("/draft-letter", async (req, res, next) => {
       success: true,
       data: draft
     });
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
 /**
  * POST /api/complaints/file
@@ -150,13 +175,16 @@ router.post("/draft-letter", async (req, res, next) => {
  * - Constructs 4-stage status timeline: Submitted -> Verified -> Forwarded -> Resolved
  * - Returns online filing route, offline route with "what to say", and pre-filled WhatsApp/email links.
  */
-router.post("/file", async (req, res, next) => {
-  try {
+router.post(
+  "/file",
+  asyncHandler(async (req, res) => {
     const parsed = FileComplaintRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
         success: false,
-        errors: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`)
+        errors: parsed.error.issues.map(
+          (i) => `${i.path.join(".")}: ${i.message}`
+        )
       });
     }
     const { report, actionPlan, citizenNote } = parsed.data;
@@ -194,15 +222,19 @@ router.post("/file", async (req, res, next) => {
       ward: report.location_text.includes("Kothrud")
         ? "Kothrud-Bavdhan Ward 12"
         : report.location_text.includes("Baner")
-        ? "Aundh-Baner Ward 09"
-        : report.location_text.includes("Viman")
-        ? "Wadgaon Sheri - Viman Nagar Ward 03"
-        : "PMC Central Ward Redressal"
+          ? "Aundh-Baner Ward 09"
+          : report.location_text.includes("Viman")
+            ? "Wadgaon Sheri - Viman Nagar Ward 03"
+            : "PMC Central Ward Redressal"
     };
 
     await appendReport(persistedRecord);
 
-    const copyReadyText = generateCopyReadyComplaint(report, authority, trackingToken);
+    const copyReadyText = generateCopyReadyComplaint(
+      report,
+      authority,
+      trackingToken
+    );
     const shareLinks = buildShareLinks(authority, copyReadyText, trackingToken);
     const statusTimeline = buildStatusTimeline(trackingToken, authority);
 
@@ -214,17 +246,21 @@ router.post("/file", async (req, res, next) => {
         authority: {
           id: authority.id,
           name: authority.name,
-          authorityName: authority.authorityName || "Pune Municipal Corporation",
+          authorityName:
+            authority.authorityName || "Pune Municipal Corporation",
           department: authority.department || "Municipal Redressal Cell",
-          portalUrl: authority.portalUrl || "https://complaint.punecorporation.org/",
+          portalUrl:
+            authority.portalUrl || "https://complaint.punecorporation.org/",
           portalName: authority.portalName || "PMC Care Portal",
           helpline: authority.helpline || "1800 1030 222",
           email: authority.email || "pmccare@punecorporation.org",
-          officeAddress: authority.officeAddress || "PMC Main Building, Shivajinagar, Pune"
+          officeAddress:
+            authority.officeAddress || "PMC Main Building, Shivajinagar, Pune"
         },
         statusTimeline,
         onlineRoute: {
-          portalUrl: authority.portalUrl || "https://complaint.punecorporation.org/",
+          portalUrl:
+            authority.portalUrl || "https://complaint.punecorporation.org/",
           portalName: authority.portalName || "PMC Care Portal",
           copyReadyText,
           instructions: authority.onlineFilingSteps || [
@@ -235,14 +271,15 @@ router.post("/file", async (req, res, next) => {
         },
         offlineRoute: authority.offlineGuide || {
           officeName: authority.name,
-          officeAddress: authority.officeAddress || "PMC Main Building, Shivajinagar, Pune",
+          officeAddress:
+            authority.officeAddress || "PMC Main Building, Shivajinagar, Pune",
           documentsToCarry: [
             "2 printed color photographs showing defect",
             "Printed formal grievance application letter",
             "Government photo ID for visitor register"
           ],
           bestTimeToVisit: "10:30 AM - 1:00 PM (Monday to Friday)",
-          whatToSay: `I am here to register an urgent ${report.category} grievance under the PMC Citizen's Charter ${authority.slaHours || 48}-hour SLA.`
+          whatToSay: `I am here to register an urgent ${report.category} grievance under the PMC Citizen's Charter ${authority.slaHours || DEFAULT_SLA_HOURS}-hour SLA.`
         },
         shareRoutes: {
           whatsappUrl: shareLinks.whatsappUrl,
@@ -251,18 +288,17 @@ router.post("/file", async (req, res, next) => {
         savedReport: persistedRecord
       }
     });
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
 /**
  * POST /api/complaints/submit-mock
  * Simulates official grievance filing with the responsible Pune authority
  * and logs the new incident to data/reports.json.
  */
-router.post("/submit-mock", async (req, res, next) => {
-  try {
+router.post(
+  "/submit-mock",
+  asyncHandler(async (req, res) => {
     const { report, actionPlan } = req.body;
     if (!report || !report.category) {
       return res.status(400).json({
@@ -288,7 +324,9 @@ router.post("/submit-mock", async (req, res, next) => {
       evidence_summary: report.evidence_summary,
       urgency_reason: report.urgency_reason,
       responsible_authority: report.responsible_authority,
-      authorityId: (actionPlan && actionPlan.authority && actionPlan.authority.id) || "pmc_road",
+      authorityId:
+        (actionPlan && actionPlan.authority && actionPlan.authority.id) ||
+        "pmc_road",
       confidence: report.confidence || 0.95,
       status: "Dispatched to Ward",
       reporter_count: 1,
@@ -296,10 +334,10 @@ router.post("/submit-mock", async (req, res, next) => {
       ward: report.location_text.includes("Kothrud")
         ? "Kothrud-Bavdhan Ward 12"
         : report.location_text.includes("Baner")
-        ? "Aundh-Baner Ward 09"
-        : report.location_text.includes("Viman")
-        ? "Wadgaon Sheri - Viman Nagar Ward 03"
-        : "PMC Central Ward Redressal"
+          ? "Aundh-Baner Ward 09"
+          : report.location_text.includes("Viman")
+            ? "Wadgaon Sheri - Viman Nagar Ward 03"
+            : "PMC Central Ward Redressal"
     };
 
     await appendReport(persistedRecord);
@@ -310,34 +348,34 @@ router.post("/submit-mock", async (req, res, next) => {
         trackingId: trackingToken,
         status: "Officially Registered with PMC Grievance Cell",
         authority: report.responsible_authority,
-        portalUrl: actionPlan?.authority?.portalUrl || "https://complaint.punecorporation.org/",
+        portalUrl:
+          actionPlan?.authority?.portalUrl ||
+          "https://complaint.punecorporation.org/",
         helpline: actionPlan?.authority?.helpline || "1800 1030 222",
-        slaHours: actionPlan?.expectedTimeline?.slaHours || 48,
-        targetResolutionDate: actionPlan?.expectedTimeline?.targetResolutionDate,
+        slaHours: actionPlan?.expectedTimeline?.slaHours || DEFAULT_SLA_HOURS,
+        targetResolutionDate:
+          actionPlan?.expectedTimeline?.targetResolutionDate,
         createdAt: timestamp,
         savedReport: persistedRecord
       }
     });
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
 /**
  * GET /api/complaints
  * Returns stored reports for the Leaflet interactive map feed.
  */
-router.get("/", async (req, res, next) => {
-  try {
+router.get(
+  "/",
+  asyncHandler(async (req, res) => {
     const reports = await getExistingReports();
     return res.json({
       success: true,
       count: reports.length,
       data: reports
     });
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
 export default router;

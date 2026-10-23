@@ -7,13 +7,19 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PUNE_BOUNDS, isWithinPune } from "../utils/geo.js";
-import { StructuredReportSchema, normalizeMimeType, detectMimeTypeFromMagicBytes } from "../utils/validators.js";
+import {
+  StructuredReportSchema,
+  normalizeMimeType,
+  detectMimeTypeFromMagicBytes
+} from "../utils/validators.js";
+import { AppError } from "../utils/appError.js";
+import { GEMINI_REQUEST_TIMEOUT_MS } from "../config/constants.js";
 
 /**
  * Custom Operational Error for Gemini Service.
  * Carries HTTP status, error code, and user-friendly message.
  */
-export class GeminiServiceError extends Error {
+export class GeminiServiceError extends AppError {
   /**
    * @param {string} message - Technical error message (key-scrubbed).
    * @param {number} [status=500] - HTTP status code.
@@ -21,12 +27,16 @@ export class GeminiServiceError extends Error {
    * @param {string} [userMessage] - User-facing friendly error text.
    */
   constructor(message, status = 500, code = "AI_ANALYSIS_FAILED", userMessage) {
-    super(message);
+    super(message, {
+      statusCode: status,
+      code,
+      isUserFacing: true,
+      userMessage: userMessage || message
+    });
     this.name = "GeminiServiceError";
     this.status = status;
     this.code = code;
     this.userMessage = userMessage || message;
-    this.isUserFacing = true;
   }
 }
 
@@ -37,7 +47,10 @@ export class GeminiServiceError extends Error {
  * @param {string} [apiKey] - API key to scrub from messages.
  * @returns {{ status: number, code: string, userMessage: string, logMessage: string, cleanMessage: string }}
  */
-export function classifyGeminiError(error, apiKey = process.env.GEMINI_API_KEY) {
+export function classifyGeminiError(
+  error,
+  apiKey = process.env.GEMINI_API_KEY
+) {
   let rawMsg = error?.message || String(error || "Unknown AI error");
   let status = error?.status || error?.statusCode;
 
@@ -75,7 +88,8 @@ export function classifyGeminiError(error, apiKey = process.env.GEMINI_API_KEY) 
     return {
       status: 429,
       code: "QUOTA_EXCEEDED",
-      userMessage: "AI analysis quota or rate limit exceeded. Please wait a few moments before trying again or submit your report directly.",
+      userMessage:
+        "AI analysis quota or rate limit exceeded. Please wait a few moments before trying again or submit your report directly.",
       logMessage: `Status 429 (QUOTA_EXCEEDED): ${rawMsg}`,
       cleanMessage: rawMsg
     };
@@ -83,7 +97,10 @@ export function classifyGeminiError(error, apiKey = process.env.GEMINI_API_KEY) 
 
   // B. INVALID API KEY / AUTHENTICATION / PERMISSION
   if (
-    (status === 400 && (lowerMsg.includes("api key") || lowerMsg.includes("api_key_invalid") || lowerMsg.includes("key not valid"))) ||
+    (status === 400 &&
+      (lowerMsg.includes("api key") ||
+        lowerMsg.includes("api_key_invalid") ||
+        lowerMsg.includes("key not valid"))) ||
     status === 401 ||
     status === 403 ||
     lowerMsg.includes("api key not valid") ||
@@ -93,7 +110,8 @@ export function classifyGeminiError(error, apiKey = process.env.GEMINI_API_KEY) 
     return {
       status: 401,
       code: "INVALID_API_KEY",
-      userMessage: "Invalid Gemini API key configured. Please verify your GEMINI_API_KEY configuration.",
+      userMessage:
+        "Invalid Gemini API key configured. Please verify your GEMINI_API_KEY configuration.",
       logMessage: `Status ${status || 401} (INVALID_API_KEY): ${rawMsg}`,
       cleanMessage: rawMsg
     };
@@ -101,7 +119,12 @@ export function classifyGeminiError(error, apiKey = process.env.GEMINI_API_KEY) 
 
   // C. UNSUPPORTED FILE FORMAT / MIME TYPE
   if (
-    (status === 400 && (lowerMsg.includes("unsupported") || lowerMsg.includes("mime") || lowerMsg.includes("invalid_argument") || lowerMsg.includes("audio format") || lowerMsg.includes("image format"))) ||
+    (status === 400 &&
+      (lowerMsg.includes("unsupported") ||
+        lowerMsg.includes("mime") ||
+        lowerMsg.includes("invalid_argument") ||
+        lowerMsg.includes("audio format") ||
+        lowerMsg.includes("image format"))) ||
     errorName === "GoogleGenerativeAIRequestInputError" ||
     lowerMsg.includes("unsupported mime type") ||
     lowerMsg.includes("unsupported file")
@@ -109,7 +132,8 @@ export function classifyGeminiError(error, apiKey = process.env.GEMINI_API_KEY) 
     return {
       status: 400,
       code: "UNSUPPORTED_FILE",
-      userMessage: "The uploaded file format is not supported by the AI analyzer. Please provide an image (JPEG, PNG, WebP), PDF document, or audio recording (WebM, WAV, MP3).",
+      userMessage:
+        "The uploaded file format is not supported by the AI analyzer. Please provide an image (JPEG, PNG, WebP), PDF document, or audio recording (WebM, WAV, MP3).",
       logMessage: `Status 400 (UNSUPPORTED_FILE): ${rawMsg}`,
       cleanMessage: rawMsg
     };
@@ -130,18 +154,24 @@ export function classifyGeminiError(error, apiKey = process.env.GEMINI_API_KEY) 
     return {
       status: 504,
       code: "TIMEOUT",
-      userMessage: "Analysis request timed out while contacting the AI service. Please try again.",
+      userMessage:
+        "Analysis request timed out while contacting the AI service. Please try again.",
       logMessage: `Status 504 (TIMEOUT): ${rawMsg}`,
       cleanMessage: rawMsg
     };
   }
 
   // E. NETWORK CONNECTION FAILURE
-  if (lowerMsg.includes("fetch failed") || lowerMsg.includes("econnrefused") || lowerMsg.includes("enotfound")) {
+  if (
+    lowerMsg.includes("fetch failed") ||
+    lowerMsg.includes("econnrefused") ||
+    lowerMsg.includes("enotfound")
+  ) {
     return {
       status: 503,
       code: "SERVICE_UNAVAILABLE",
-      userMessage: "Unable to connect to the Gemini AI service. Please check your network connection or try again later.",
+      userMessage:
+        "Unable to connect to the Gemini AI service. Please check your network connection or try again later.",
       logMessage: `Status 503 (SERVICE_UNAVAILABLE): ${rawMsg}`,
       cleanMessage: rawMsg
     };
@@ -151,7 +181,8 @@ export function classifyGeminiError(error, apiKey = process.env.GEMINI_API_KEY) 
   return {
     status: status || 500,
     code: "AI_ANALYSIS_FAILED",
-    userMessage: "An error occurred while analyzing the complaint with Gemini AI. Please try again.",
+    userMessage:
+      "An error occurred while analyzing the complaint with Gemini AI. Please try again.",
     logMessage: `Status ${status || 500} (AI_ANALYSIS_FAILED): ${rawMsg}`,
     cleanMessage: rawMsg
   };
@@ -179,37 +210,45 @@ export const COMPLAINT_JSON_SCHEMA = {
     },
     subcategory: {
       type: "string",
-      description: "Specific defect type (e.g., Pothole, Overflowing Drain, Open Manhole, Broken Light)"
+      description:
+        "Specific defect type (e.g., Pothole, Overflowing Drain, Open Manhole, Broken Light)"
     },
     severity: {
       type: "integer",
-      description: "Urgency scale from 1 (minor cosmetic) to 5 (critical life/safety hazard)",
+      description:
+        "Urgency scale from 1 (minor cosmetic) to 5 (critical life/safety hazard)",
       minimum: 1,
       maximum: 5
     },
     description: {
       type: "string",
-      description: "Clean, objective, formal description in English summarizing the citizen report"
+      description:
+        "Clean, objective, formal description in English summarizing the citizen report"
     },
     location_text: {
       type: "string",
-      description: "Extracted landmark, street, chowk, or ward name in Pune, Maharashtra"
+      description:
+        "Extracted landmark, street, chowk, or ward name in Pune, Maharashtra"
     },
     lat: {
       type: "number",
-      description: "Estimated or extracted latitude in Pune (between 18.35 and 18.75)"
+      description:
+        "Estimated or extracted latitude in Pune (between 18.35 and 18.75)"
     },
     lng: {
       type: "number",
-      description: "Estimated or extracted longitude in Pune (between 73.65 and 74.05)"
+      description:
+        "Estimated or extracted longitude in Pune (between 73.65 and 74.05)"
     },
     evidence_summary: {
       type: "string",
-      description: "Concrete observations from text, image, audio, or document evidence"
+      description:
+        "Concrete observations from text, image, audio, or document evidence"
     },
     urgency_reason: {
       type: "string",
-      description: "Explicit reason explaining the severity and public health/safety impact"
+      description:
+        "Explicit reason explaining the severity and public health/safety impact"
     },
     responsible_authority: {
       type: "string",
@@ -217,7 +256,8 @@ export const COMPLAINT_JSON_SCHEMA = {
     },
     confidence: {
       type: "number",
-      description: "Model confidence in categorization and extraction (0.0 to 1.0)"
+      description:
+        "Model confidence in categorization and extraction (0.0 to 1.0)"
     }
   },
   required: [
@@ -239,20 +279,96 @@ export const COMPLAINT_JSON_SCHEMA = {
  * Pune Landmark coordinate lookup table for accurate spatial grounding.
  */
 const PUNE_LANDMARKS = [
-  { keywords: ["kothrud", "paud road", "karve statue", "ideal colony", "mayur colony"], name: "Paud Road, Kothrud, Pune", lat: 18.5074, lng: 73.8077 },
-  { keywords: ["baner", "balewadi", "high street"], name: "Baner High Street, Baner, Pune", lat: 18.5590, lng: 73.7868 },
-  { keywords: ["viman nagar", "phoenix", "symbiosis", "airport road"], name: "Viman Nagar, Pune", lat: 18.5679, lng: 73.9143 },
-  { keywords: ["fc road", "fergusson", "goodluck", "shivajinagar", "deccan"], name: "FC Road, Shivajinagar, Pune", lat: 18.5284, lng: 73.8423 },
-  { keywords: ["hinjawadi", "hinjewadi", "phase 1", "phase 2", "infotech"], name: "Shivaji Chowk, Phase 1, Hinjawadi, Pune", lat: 18.5912, lng: 73.7380 },
-  { keywords: ["hadapsar", "magarpatta", "gadital", "amanora"], name: "Magarpatta South Gate, Hadapsar, Pune", lat: 18.5020, lng: 73.9272 },
-  { keywords: ["katraj", "dhankawadi", "satara road", "katraj lake"], name: "Katraj Dairy Chowk, Katraj, Pune", lat: 18.4552, lng: 73.8560 },
-  { keywords: ["swargate", "sarasbaug", "jedhe chowk"], name: "Jedhe Chowk, Swargate, Pune", lat: 18.5018, lng: 73.8636 },
-  { keywords: ["kalyani nagar", "jogger", "east avenue"], name: "Central Avenue, Kalyani Nagar, Pune", lat: 18.5463, lng: 73.9034 },
-  { keywords: ["koregaon park", "kp", "lane 5", "lane 7", "north main"], name: "North Main Road, Koregaon Park, Pune", lat: 18.5362, lng: 73.8940 },
-  { keywords: ["aundh", "parihar chowk", "iti road", "westend"], name: "Parihar Chowk, ITI Road, Aundh, Pune", lat: 18.5626, lng: 73.8087 },
-  { keywords: ["wakad", "dange chowk", "bhumkar", "datta mandir"], name: "Dutta Mandir Road, Wakad, Pune", lat: 18.5987, lng: 73.7634 },
-  { keywords: ["karve nagar", "cummins", "hingne"], name: "Cummins College Road, Karve Nagar, Pune", lat: 18.4912, lng: 73.8182 },
-  { keywords: ["camp", "mg road", "east street", "cantonment"], name: "MG Road, Camp, Pune", lat: 18.5167, lng: 73.8795 }
+  {
+    keywords: [
+      "kothrud",
+      "paud road",
+      "karve statue",
+      "ideal colony",
+      "mayur colony"
+    ],
+    name: "Paud Road, Kothrud, Pune",
+    lat: 18.5074,
+    lng: 73.8077
+  },
+  {
+    keywords: ["baner", "balewadi", "high street"],
+    name: "Baner High Street, Baner, Pune",
+    lat: 18.559,
+    lng: 73.7868
+  },
+  {
+    keywords: ["viman nagar", "phoenix", "symbiosis", "airport road"],
+    name: "Viman Nagar, Pune",
+    lat: 18.5679,
+    lng: 73.9143
+  },
+  {
+    keywords: ["fc road", "fergusson", "goodluck", "shivajinagar", "deccan"],
+    name: "FC Road, Shivajinagar, Pune",
+    lat: 18.5284,
+    lng: 73.8423
+  },
+  {
+    keywords: ["hinjawadi", "hinjewadi", "phase 1", "phase 2", "infotech"],
+    name: "Shivaji Chowk, Phase 1, Hinjawadi, Pune",
+    lat: 18.5912,
+    lng: 73.738
+  },
+  {
+    keywords: ["hadapsar", "magarpatta", "gadital", "amanora"],
+    name: "Magarpatta South Gate, Hadapsar, Pune",
+    lat: 18.502,
+    lng: 73.9272
+  },
+  {
+    keywords: ["katraj", "dhankawadi", "satara road", "katraj lake"],
+    name: "Katraj Dairy Chowk, Katraj, Pune",
+    lat: 18.4552,
+    lng: 73.856
+  },
+  {
+    keywords: ["swargate", "sarasbaug", "jedhe chowk"],
+    name: "Jedhe Chowk, Swargate, Pune",
+    lat: 18.5018,
+    lng: 73.8636
+  },
+  {
+    keywords: ["kalyani nagar", "jogger", "east avenue"],
+    name: "Central Avenue, Kalyani Nagar, Pune",
+    lat: 18.5463,
+    lng: 73.9034
+  },
+  {
+    keywords: ["koregaon park", "kp", "lane 5", "lane 7", "north main"],
+    name: "North Main Road, Koregaon Park, Pune",
+    lat: 18.5362,
+    lng: 73.894
+  },
+  {
+    keywords: ["aundh", "parihar chowk", "iti road", "westend"],
+    name: "Parihar Chowk, ITI Road, Aundh, Pune",
+    lat: 18.5626,
+    lng: 73.8087
+  },
+  {
+    keywords: ["wakad", "dange chowk", "bhumkar", "datta mandir"],
+    name: "Dutta Mandir Road, Wakad, Pune",
+    lat: 18.5987,
+    lng: 73.7634
+  },
+  {
+    keywords: ["karve nagar", "cummins", "hingne"],
+    name: "Cummins College Road, Karve Nagar, Pune",
+    lat: 18.4912,
+    lng: 73.8182
+  },
+  {
+    keywords: ["camp", "mg road", "east street", "cantonment"],
+    name: "MG Road, Camp, Pune",
+    lat: 18.5167,
+    lng: 73.8795
+  }
 ];
 
 /**
@@ -261,7 +377,11 @@ const PUNE_LANDMARKS = [
  */
 function getGeminiClient() {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === "your_gemini_api_key_here" || apiKey.trim().length === 0) {
+  if (
+    !apiKey ||
+    apiKey === "your_gemini_api_key_here" ||
+    apiKey.trim().length === 0
+  ) {
     return null;
   }
   return new GoogleGenerativeAI(apiKey);
@@ -276,7 +396,11 @@ function getGeminiClient() {
  * @returns {{ locationText: string, lat: number, lng: number }}
  */
 function resolvePuneLocation(text = "", userLat, userLng, locationText) {
-  if (typeof userLat === "number" && typeof userLng === "number" && isWithinPune(userLat, userLng)) {
+  if (
+    typeof userLat === "number" &&
+    typeof userLng === "number" &&
+    isWithinPune(userLat, userLng)
+  ) {
     return {
       locationText: locationText || "Citizen Geolocation (Pune, Maharashtra)",
       lat: userLat,
@@ -312,7 +436,13 @@ function resolvePuneLocation(text = "", userLat, userLng, locationText) {
  * @param {string|undefined} locationText - Reverse geocoded address.
  * @returns {object} Structured complaint matching COMPLAINT_JSON_SCHEMA.
  */
-export function fallbackAnalyzeComplaint(text = "", userLat, userLng, fileInfo, locationText) {
+export function fallbackAnalyzeComplaint(
+  text = "",
+  userLat,
+  userLng,
+  fileInfo,
+  locationText
+) {
   const fileKeywords = (fileInfo?.filename || "").toLowerCase();
   const lower = `${text || ""} ${fileKeywords}`.toLowerCase();
   const loc = resolvePuneLocation(text, userLat, userLng, locationText);
@@ -321,7 +451,8 @@ export function fallbackAnalyzeComplaint(text = "", userLat, userLng, fileInfo, 
   let subcategory = "Potholes";
   let severity = 3;
   let authority = "Pune Municipal Corporation - Road Department";
-  let urgency = "Road defect impacting traffic movement and vehicle suspension.";
+  let urgency =
+    "Road defect impacting traffic movement and vehicle suspension.";
 
   if (
     lower.includes("drain") ||
@@ -331,13 +462,18 @@ export function fallbackAnalyzeComplaint(text = "", userLat, userLng, fileInfo, 
     lower.includes("गटार") ||
     lower.includes("नाली") ||
     lower.includes("chamber") ||
-    (lower.includes("overflow") && !lower.includes("garbage") && !lower.includes("waste") && !lower.includes("kachra") && !lower.includes("कचरा"))
+    (lower.includes("overflow") &&
+      !lower.includes("garbage") &&
+      !lower.includes("waste") &&
+      !lower.includes("kachra") &&
+      !lower.includes("कचरा"))
   ) {
     category = "Drainage & Sewage";
     subcategory = lower.includes("manhole") ? "Open Manhole" : "Drain Overflow";
     severity = lower.includes("manhole") ? 5 : 4;
     authority = "PMC - Drainage & Sewerage Maintenance Department";
-    urgency = "Direct sewage overflow causes severe public hygiene risk, vector-borne disease spread, and hazardous road contamination.";
+    urgency =
+      "Direct sewage overflow causes severe public hygiene risk, vector-borne disease spread, and hazardous road contamination.";
   } else if (
     lower.includes("light") ||
     lower.includes("wire") ||
@@ -349,7 +485,10 @@ export function fallbackAnalyzeComplaint(text = "", userLat, userLng, fileInfo, 
     lower.includes("spark")
   ) {
     category = "Street Lighting & Electricity";
-    subcategory = lower.includes("wire") || lower.includes("spark") ? "Exposed Wire" : "Broken Street Light";
+    subcategory =
+      lower.includes("wire") || lower.includes("spark")
+        ? "Exposed Wire"
+        : "Broken Street Light";
     severity = lower.includes("wire") ? 5 : 3;
     authority = "MSEDCL (Mahavitaran) & PMC Street Light Cell";
     urgency = lower.includes("wire")
@@ -368,7 +507,8 @@ export function fallbackAnalyzeComplaint(text = "", userLat, userLng, fileInfo, 
     subcategory = lower.includes("burn") ? "Burning Waste" : "Garbage Dump";
     severity = lower.includes("burn") ? 4 : 3;
     authority = "PMC - Solid Waste Management Department (Swachh Pune)";
-    urgency = "Accumulated municipal waste attracts stray animals, blocks pedestrian access, and creates toxic foul air.";
+    urgency =
+      "Accumulated municipal waste attracts stray animals, blocks pedestrian access, and creates toxic foul air.";
   } else if (
     lower.includes("water") ||
     lower.includes("pipe") ||
@@ -377,10 +517,14 @@ export function fallbackAnalyzeComplaint(text = "", userLat, userLng, fileInfo, 
     lower.includes("पानी")
   ) {
     category = "Water Supply";
-    subcategory = lower.includes("contaminat") || lower.includes("dirty") ? "Contaminated Water" : "Pipeline Leakage";
+    subcategory =
+      lower.includes("contaminat") || lower.includes("dirty")
+        ? "Contaminated Water"
+        : "Pipeline Leakage";
     severity = 4;
     authority = "PMC - Water Supply & Pipeline Maintenance Department";
-    urgency = "Loss of treated potable municipal drinking water and risk of domestic waterborne contamination.";
+    urgency =
+      "Loss of treated potable municipal drinking water and risk of domestic waterborne contamination.";
   } else if (
     lower.includes("traffic") ||
     lower.includes("signal") ||
@@ -388,15 +532,19 @@ export function fallbackAnalyzeComplaint(text = "", userLat, userLng, fileInfo, 
     lower.includes("ट्रॅफिक")
   ) {
     category = "Traffic & Obstructions";
-    subcategory = lower.includes("signal") ? "Signal Not Working" : "Road Encroachment";
+    subcategory = lower.includes("signal")
+      ? "Signal Not Working"
+      : "Road Encroachment";
     severity = 3;
     authority = "Pune Traffic Police & Encroachment Department";
-    urgency = "Severe traffic congestion, gridlock at junction, and elevated collision potential.";
+    urgency =
+      "Severe traffic congestion, gridlock at junction, and elevated collision potential.";
   }
 
-  let cleanDescription = "";
+  let cleanDescription;
   if (text && text.trim().length > 10) {
-    cleanDescription = text.trim().charAt(0).toUpperCase() + text.trim().slice(1);
+    cleanDescription =
+      text.trim().charAt(0).toUpperCase() + text.trim().slice(1);
   } else if (fileInfo?.mimetype?.includes("audio")) {
     cleanDescription = `Citizen voice recording received regarding urgent ${subcategory.toLowerCase()} near ${loc.locationText}.`;
   } else if (fileInfo?.mimetype === "application/pdf") {
@@ -438,20 +586,35 @@ export function fallbackAnalyzeComplaint(text = "", userLat, userLng, fileInfo, 
  * @param {string} [params.locationText] - Optional reverse-geocoded address.
  * @returns {Promise<object>} Structured civic complaint report.
  */
-export async function analyzeWithGemini({ text = "", file, audioFile, userLat, userLng, locationText }) {
+export async function analyzeWithGemini({
+  text = "",
+  file,
+  audioFile,
+  userLat,
+  userLng,
+  locationText
+}) {
   const gemini = getGeminiClient();
   const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
   const primaryEvidence = file || audioFile;
-  const fileInfo = primaryEvidence ? {
-    filename: primaryEvidence.originalname,
-    mimetype: primaryEvidence.canonicalMime || primaryEvidence.mimetype,
-    size: primaryEvidence.size
-  } : undefined;
+  const fileInfo = primaryEvidence
+    ? {
+        filename: primaryEvidence.originalname,
+        mimetype: primaryEvidence.canonicalMime || primaryEvidence.mimetype,
+        size: primaryEvidence.size
+      }
+    : undefined;
 
   // If no Gemini API key configured, use fallback engine
   if (!gemini) {
-    return fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo, locationText);
+    return fallbackAnalyzeComplaint(
+      text,
+      userLat,
+      userLng,
+      fileInfo,
+      locationText
+    );
   }
 
   try {
@@ -464,7 +627,7 @@ export async function analyzeWithGemini({ text = "", file, audioFile, userLat, u
           temperature: 0.1
         }
       },
-      { timeout: 25000 } // 25s timeout for AI response
+      { timeout: GEMINI_REQUEST_TIMEOUT_MS }
     );
 
     const parts = [];
@@ -507,7 +670,12 @@ Synthesize all observations into the required JSON format. Ensure evidence_summa
 
     // 1. Attach primary evidence file (Photo, PDF, Video) if provided
     if (file && file.buffer) {
-      const mime = file.canonicalMime || normalizeMimeType(file.mimetype || detectMimeTypeFromMagicBytes(file.buffer), false);
+      const mime =
+        file.canonicalMime ||
+        normalizeMimeType(
+          file.mimetype || detectMimeTypeFromMagicBytes(file.buffer),
+          false
+        );
       parts.push({
         inlineData: {
           mimeType: mime,
@@ -518,7 +686,9 @@ Synthesize all observations into the required JSON format. Ensure evidence_summa
 
     // 2. Attach voice recording audio if provided
     if (audioFile && audioFile.buffer) {
-      const audioMime = audioFile.canonicalMime || normalizeMimeType(audioFile.mimetype || "audio/webm", true);
+      const audioMime =
+        audioFile.canonicalMime ||
+        normalizeMimeType(audioFile.mimetype || "audio/webm", true);
       parts.push({
         inlineData: {
           mimeType: audioMime,
@@ -533,7 +703,12 @@ Synthesize all observations into the required JSON format. Ensure evidence_summa
 
     // Sanity-check coordinates
     if (!isWithinPune(structured.lat, structured.lng)) {
-      const fallbackLoc = resolvePuneLocation(text, userLat, userLng, locationText);
+      const fallbackLoc = resolvePuneLocation(
+        text,
+        userLat,
+        userLng,
+        locationText
+      );
       structured.lat = fallbackLoc.lat;
       structured.lng = fallbackLoc.lng;
     }
@@ -541,8 +716,17 @@ Synthesize all observations into the required JSON format. Ensure evidence_summa
     // Strict schema validation of AI output: reject anything off-schema
     const schemaValidation = StructuredReportSchema.safeParse(structured);
     if (!schemaValidation.success) {
-      console.warn("Gemini output violated strict schema, falling back to safe local extraction:", schemaValidation.error.message);
-      return fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo, locationText);
+      console.warn(
+        "Gemini output violated strict schema, falling back to safe local extraction:",
+        schemaValidation.error.message
+      );
+      return fallbackAnalyzeComplaint(
+        text,
+        userLat,
+        userLng,
+        fileInfo,
+        locationText
+      );
     }
 
     return schemaValidation.data;
@@ -554,7 +738,14 @@ Synthesize all observations into the required JSON format. Ensure evidence_summa
 
     // If it's a specific operational error (quota, invalid key, unsupported file, timeout),
     // re-throw a structured GeminiServiceError so the route returns a user-friendly error!
-    if (["QUOTA_EXCEEDED", "INVALID_API_KEY", "UNSUPPORTED_FILE", "TIMEOUT"].includes(classified.code)) {
+    if (
+      [
+        "QUOTA_EXCEEDED",
+        "INVALID_API_KEY",
+        "UNSUPPORTED_FILE",
+        "TIMEOUT"
+      ].includes(classified.code)
+    ) {
       throw new GeminiServiceError(
         classified.userMessage,
         classified.status,
@@ -564,8 +755,17 @@ Synthesize all observations into the required JSON format. Ensure evidence_summa
     }
 
     // Fall back to local heuristic analyzer for generic errors (e.g. offline testing)
-    console.warn("Falling back to local heuristic analyzer:", classified.cleanMessage);
-    return fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo, locationText);
+    console.warn(
+      "Falling back to local heuristic analyzer:",
+      classified.cleanMessage
+    );
+    return fallbackAnalyzeComplaint(
+      text,
+      userLat,
+      userLng,
+      fileInfo,
+      locationText
+    );
   }
 }
 
@@ -591,7 +791,10 @@ export async function draftComplaintLetter({ report, language = "en" }) {
 
   if (gemini) {
     try {
-      const model = gemini.getGenerativeModel({ model: modelName }, { timeout: 20000 });
+      const model = gemini.getGenerativeModel(
+        { model: modelName },
+        { timeout: GEMINI_REQUEST_TIMEOUT_MS }
+      );
       const prompt = `Draft a formal, respectful, and legally sound municipal grievance letter in ${targetLang}.
 Report Details:
 - Category: ${report.category} (${report.subcategory})
@@ -612,7 +815,9 @@ Return as pure text with "SUBJECT: [Subject]" on the first line, followed by the
       const result = await model.generateContent(prompt);
       const text = result.response.text().trim();
       const subjectMatch = text.match(/SUBJECT:\s*(.+)/i);
-      const subject = subjectMatch ? subjectMatch[1].trim() : `Urgent Redressal Request: ${report.subcategory} at ${report.location_text}`;
+      const subject = subjectMatch
+        ? subjectMatch[1].trim()
+        : `Urgent Redressal Request: ${report.subcategory} at ${report.location_text}`;
       const letterBody = text.replace(/SUBJECT:\s*.+\n?/i, "").trim();
 
       return { subject, letterBody, language };

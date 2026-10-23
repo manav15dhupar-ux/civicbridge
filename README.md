@@ -83,6 +83,7 @@ flowchart TD
    * Selects a suggested authority from the local registry and generates a four-stage action plan.
    * Displays configured portal links, contact details, and SLA values (**verify before use**).
    * Provides suggested online instructions, offline guidance, and a generated grievance-letter draft.
+   * Open manholes, exposed or fallen wires, flooding, and major road collapses are escalated as critical hazards. The result shows a red "Immediate safety advice" card and prioritizes emergency contact guidance; the app does not call or dispatch emergency services automatically.
 5. **"File This Complaint" Hub (Step 5):**
    * **Guided online route:** Provides copy-ready text and a link to a configured external portal; citizens must submit through that portal themselves.
    * **Offline route:** Displays configured office guidance, document suggestions, and a suggested script (**verify contact and office details before use**).
@@ -109,6 +110,7 @@ CivicBridge/
 │   │   ├── api.js
 │   │   ├── app.js
 │   │   ├── audio.js
+│   │   ├── constants.js
 │   │   ├── exif.js
 │   │   ├── map.js
 │   │   ├── tailwind-config.js
@@ -116,7 +118,10 @@ CivicBridge/
 │   └── index.html
 ├── server/
 │   ├── config/
+│   │   ├── constants.js
 │   │   └── authorities.json   # Configured authority routing/contact information
+│   ├── middleware/
+│   │   └── errorHandler.js
 │   ├── routes/
 │   │   ├── authorityRoutes.js
 │   │   ├── complaintRoutes.js
@@ -183,6 +188,8 @@ CivicBridge/
    ```bash
    npm test
    ```
+
+   Use `npm run lint` to check JavaScript and `npm run format` to format source files.
 
 4. **Start the Application:**
    ```bash

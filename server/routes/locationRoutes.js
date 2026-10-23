@@ -8,6 +8,11 @@ import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { reverseGeocode } from "../services/locationService.js";
 import { isWithinPune, PUNE_BOUNDS } from "../utils/geo.js";
+import {
+  API_RATE_LIMIT_WINDOW_MS,
+  GEOCODE_RATE_LIMIT_MAX_REQUESTS
+} from "../config/constants.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
 const router = express.Router();
 
@@ -16,20 +21,27 @@ const router = express.Router();
  * 60 requests per 15 minutes per IP.
  */
 const geocodeLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 60,
+  windowMs: API_RATE_LIMIT_WINDOW_MS,
+  max: GEOCODE_RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { trustProxy: false, xForwardedForHeader: false },
   message: {
     success: false,
-    error: "Too many location lookup requests from this IP. Please try again shortly."
+    error:
+      "Too many location lookup requests from this IP. Please try again shortly."
   }
 });
 
 const ReverseGeocodeQuerySchema = z.object({
-  lat: z.coerce.number().min(-90, "Latitude must be >= -90").max(90, "Latitude must be <= 90"),
-  lng: z.coerce.number().min(-180, "Longitude must be >= -180").max(180, "Longitude must be <= 180")
+  lat: z.coerce
+    .number()
+    .min(-90, "Latitude must be >= -90")
+    .max(90, "Latitude must be <= 90"),
+  lng: z.coerce
+    .number()
+    .min(-180, "Longitude must be >= -180")
+    .max(180, "Longitude must be <= 180")
 });
 
 /**
@@ -37,13 +49,17 @@ const ReverseGeocodeQuerySchema = z.object({
  * Returns human-readable address with caching, Pune boundary validation,
  * and location confidence level.
  */
-router.get("/reverse-geocode", geocodeLimiter, async (req, res, next) => {
-  try {
+router.get(
+  "/reverse-geocode",
+  geocodeLimiter,
+  asyncHandler(async (req, res) => {
     const parseResult = ReverseGeocodeQuerySchema.safeParse(req.query);
     if (!parseResult.success) {
       return res.status(400).json({
         success: false,
-        errors: parseResult.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`)
+        errors: parseResult.error.issues.map(
+          (i) => `${i.path.join(".")}: ${i.message}`
+        )
       });
     }
 
@@ -62,15 +78,17 @@ router.get("/reverse-geocode", geocodeLimiter, async (req, res, next) => {
         puneBounds: PUNE_BOUNDS,
         confidenceBadge: inPune
           ? { label: "Inside Pune Boundary", level: "high", color: "emerald" }
-          : { label: "Outside Pune Boundary", level: "warning", color: "amber" },
+          : {
+              label: "Outside Pune Boundary",
+              level: "warning",
+              color: "amber"
+            },
         source: geocode.source,
         cached: geocode.cached
       }
     });
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
 /**
  * GET /api/location/bounds

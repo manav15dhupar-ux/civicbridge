@@ -14,7 +14,11 @@ let recordingSeconds = 0;
  * @returns {boolean}
  */
 export function isAudioRecordingSupported() {
-  return Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  return Boolean(
+    navigator.mediaDevices &&
+    navigator.mediaDevices.getUserMedia &&
+    window.MediaRecorder
+  );
 }
 
 /**
@@ -27,7 +31,11 @@ export function isAudioRecordingSupported() {
  */
 export async function startRecording({ onStart, onTick, onStop, onError }) {
   if (!isAudioRecordingSupported()) {
-    onError(new Error("Voice recording is not supported in this browser. Please type your complaint."));
+    onError(
+      new Error(
+        "Voice recording is not supported in this browser. Please type your complaint."
+      )
+    );
     return;
   }
 
@@ -79,7 +87,8 @@ export async function startRecording({ onStart, onTick, onStop, onError }) {
     console.error("Microphone access error:", err);
     let msg = "Could not access microphone.";
     if (err.name === "NotAllowedError") {
-      msg = "Microphone permission denied. Please allow microphone access to record voice complaints.";
+      msg =
+        "Microphone permission denied. Please allow microphone access to record voice complaints.";
     }
     if (typeof onError === "function") {
       onError(new Error(msg));

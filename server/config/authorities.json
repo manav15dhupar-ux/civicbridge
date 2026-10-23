@@ -3,7 +3,12 @@
     {
       "id": "pmc_road",
       "category": "Roads & Footpaths",
-      "categories": ["Roads & Footpaths", "Potholes", "Broken Asphalt", "Footpath Encroachment"],
+      "categories": [
+        "Roads & Footpaths",
+        "Potholes",
+        "Broken Asphalt",
+        "Footpath Encroachment"
+      ],
       "authorityName": "Pune Municipal Corporation",
       "department": "Road & Infrastructure Department",
       "name": "Pune Municipal Corporation - Road Department",
@@ -37,12 +42,36 @@
       "offlineOfficeDetails": {
         "headOffice": "PMC Main Building, Shivajinagar, Pune - 411005",
         "wardOffices": [
-          { "name": "Kothrud-Bavdhan Ward Office", "address": "Near Karve Statue, Paud Road, Kothrud", "phone": "020-25381804" },
-          { "name": "Aundh-Baner Ward Office", "address": "ITI Road, Parihar Chowk, Aundh", "phone": "020-25881023" },
-          { "name": "Shivajinagar-Ghole Road Ward Office", "address": "Ghole Road, Shivajinagar", "phone": "020-25538562" },
-          { "name": "Ahmednagar Road - Wadgaon Sheri Ward Office", "address": "Near Phoenix Mall, Viman Nagar", "phone": "020-26633000" },
-          { "name": "Hadapsar-Mundhwa Ward Office", "address": "Gadital, Solapur Road, Hadapsar", "phone": "020-26990520" },
-          { "name": "Kasba-Vishrambaug Wada Ward Office", "address": "Sadashiv Peth, Pune", "phone": "020-24471012" }
+          {
+            "name": "Kothrud-Bavdhan Ward Office",
+            "address": "Near Karve Statue, Paud Road, Kothrud",
+            "phone": "020-25381804"
+          },
+          {
+            "name": "Aundh-Baner Ward Office",
+            "address": "ITI Road, Parihar Chowk, Aundh",
+            "phone": "020-25881023"
+          },
+          {
+            "name": "Shivajinagar-Ghole Road Ward Office",
+            "address": "Ghole Road, Shivajinagar",
+            "phone": "020-25538562"
+          },
+          {
+            "name": "Ahmednagar Road - Wadgaon Sheri Ward Office",
+            "address": "Near Phoenix Mall, Viman Nagar",
+            "phone": "020-26633000"
+          },
+          {
+            "name": "Hadapsar-Mundhwa Ward Office",
+            "address": "Gadital, Solapur Road, Hadapsar",
+            "phone": "020-26990520"
+          },
+          {
+            "name": "Kasba-Vishrambaug Wada Ward Office",
+            "address": "Sadashiv Peth, Pune",
+            "phone": "020-24471012"
+          }
         ],
         "timings": "Monday to Friday: 10:00 AM - 5:30 PM (Token counter closes at 4:30 PM)",
         "documentsToCarry": [
@@ -55,7 +84,13 @@
     {
       "id": "pmc_drainage",
       "category": "Drainage & Sewage",
-      "categories": ["Drainage & Sewage", "Drain Overflow", "Blocked Gutter", "Open Manhole", "Choked Chamber"],
+      "categories": [
+        "Drainage & Sewage",
+        "Drain Overflow",
+        "Blocked Gutter",
+        "Open Manhole",
+        "Choked Chamber"
+      ],
       "authorityName": "Pune Municipal Corporation",
       "department": "Drainage & Sewerage Maintenance Department",
       "name": "PMC - Drainage & Sewerage Maintenance Department",
@@ -89,9 +124,21 @@
       "offlineOfficeDetails": {
         "headOffice": "Drainage Dept, 3rd Floor, PMC New Annex Building, Shivajinagar",
         "wardOffices": [
-          { "name": "Kothrud Drainage Sub-division", "address": "Near Shivaji Putla, Paud Road", "phone": "020-25381804" },
-          { "name": "Yerwada-Kalyani Nagar Office", "address": "Airport Road, Yerwada", "phone": "020-26685412" },
-          { "name": "Bhavani Peth Ward Office", "address": "Near Ramoshi Gate, Bhavani Peth", "phone": "020-26385200" }
+          {
+            "name": "Kothrud Drainage Sub-division",
+            "address": "Near Shivaji Putla, Paud Road",
+            "phone": "020-25381804"
+          },
+          {
+            "name": "Yerwada-Kalyani Nagar Office",
+            "address": "Airport Road, Yerwada",
+            "phone": "020-26685412"
+          },
+          {
+            "name": "Bhavani Peth Ward Office",
+            "address": "Near Ramoshi Gate, Bhavani Peth",
+            "phone": "020-26385200"
+          }
         ],
         "timings": "24x7 Emergency Drainage Control Room operates round the clock.",
         "documentsToCarry": [
@@ -103,7 +150,13 @@
     {
       "id": "pmc_waste",
       "category": "Garbage & Waste",
-      "categories": ["Garbage & Waste", "Garbage Dump", "Missed Collection", "Debris Dumping", "Burning Waste"],
+      "categories": [
+        "Garbage & Waste",
+        "Garbage Dump",
+        "Missed Collection",
+        "Debris Dumping",
+        "Burning Waste"
+      ],
       "authorityName": "Pune Municipal Corporation",
       "department": "Solid Waste Management Department (Swachh Pune)",
       "name": "PMC - Solid Waste Management Department (Swachh Pune)",
@@ -136,8 +189,16 @@
       "offlineOfficeDetails": {
         "headOffice": "Solid Waste Management Cell, PMC Annex Building, Shivajinagar",
         "wardOffices": [
-          { "name": "Aundh-Baner Ward Health Office", "address": "Parihar Chowk, Aundh", "phone": "020-25881023" },
-          { "name": "Sinhagad Road Ward Office", "address": "Dandekar Bridge, Sinhagad Road", "phone": "020-24330100" }
+          {
+            "name": "Aundh-Baner Ward Health Office",
+            "address": "Parihar Chowk, Aundh",
+            "phone": "020-25881023"
+          },
+          {
+            "name": "Sinhagad Road Ward Office",
+            "address": "Dandekar Bridge, Sinhagad Road",
+            "phone": "020-24330100"
+          }
         ],
         "timings": "Monday to Saturday: 8:00 AM - 4:00 PM (Sanitation Inspectors available before 11 AM)",
         "documentsToCarry": [
@@ -149,7 +210,13 @@
     {
       "id": "msedcl_pmc_light",
       "category": "Street Lighting & Electricity",
-      "categories": ["Street Lighting & Electricity", "Broken Street Light", "Exposed Wire", "Transformer Sparking", "Power Outage"],
+      "categories": [
+        "Street Lighting & Electricity",
+        "Broken Street Light",
+        "Exposed Wire",
+        "Transformer Sparking",
+        "Power Outage"
+      ],
       "authorityName": "Maharashtra State Electricity Distribution Co. Ltd. (MSEDCL)",
       "department": "Pune Urban Electrical & Streetlight Division",
       "name": "MSEDCL (Mahavitaran) & PMC Street Light Cell",
@@ -181,8 +248,16 @@
       "offlineOfficeDetails": {
         "headOffice": "MSEDCL Pune Circle Office, Rastapeth, Pune - 411011",
         "wardOffices": [
-          { "name": "Shivajinagar Electrical Division", "address": "Model Colony, Pune", "phone": "020-25678100" },
-          { "name": "Kothrud Sub-division Office", "address": "Mayur Colony, Kothrud", "phone": "020-25442110" }
+          {
+            "name": "Shivajinagar Electrical Division",
+            "address": "Model Colony, Pune",
+            "phone": "020-25678100"
+          },
+          {
+            "name": "Kothrud Sub-division Office",
+            "address": "Mayur Colony, Kothrud",
+            "phone": "020-25442110"
+          }
         ],
         "timings": "MSEDCL 24x7 Breakdown call center. Branch offices 10:30 AM - 5:00 PM.",
         "documentsToCarry": [
@@ -194,7 +269,13 @@
     {
       "id": "pmc_water",
       "category": "Water Supply",
-      "categories": ["Water Supply", "Pipeline Leakage", "Contaminated Water", "Low Water Pressure", "No Water Supply"],
+      "categories": [
+        "Water Supply",
+        "Pipeline Leakage",
+        "Contaminated Water",
+        "Low Water Pressure",
+        "No Water Supply"
+      ],
       "authorityName": "Pune Municipal Corporation",
       "department": "Water Supply & Pumping Maintenance Department",
       "name": "PMC - Water Supply & Pipeline Maintenance Department",
@@ -226,8 +307,16 @@
       "offlineOfficeDetails": {
         "headOffice": "Parvati Water Works (Pumping Station), Pune - 411009",
         "wardOffices": [
-          { "name": "Chaturshringi Water Works Office", "address": "Senapati Bapat Road, Shivajinagar", "phone": "020-25651120" },
-          { "name": "Warje Pumping Station Office", "address": "Warje Malwadi, Pune", "phone": "020-25234500" }
+          {
+            "name": "Chaturshringi Water Works Office",
+            "address": "Senapati Bapat Road, Shivajinagar",
+            "phone": "020-25651120"
+          },
+          {
+            "name": "Warje Pumping Station Office",
+            "address": "Warje Malwadi, Pune",
+            "phone": "020-25234500"
+          }
         ],
         "timings": "24x7 Water breakdown desk. Executive Engineers available 11:00 AM - 2:00 PM.",
         "documentsToCarry": [
@@ -239,7 +328,13 @@
     {
       "id": "pune_traffic_police",
       "category": "Traffic & Obstructions",
-      "categories": ["Traffic & Obstructions", "Signal Not Working", "Illegal Parking", "Road Encroachment", "Abandoned Vehicle"],
+      "categories": [
+        "Traffic & Obstructions",
+        "Signal Not Working",
+        "Illegal Parking",
+        "Road Encroachment",
+        "Abandoned Vehicle"
+      ],
       "authorityName": "Pune City Police Commissionerate",
       "department": "Traffic Control Branch & Anti-Encroachment Wing",
       "name": "Pune Traffic Police & Encroachment Department",
@@ -271,9 +366,21 @@
       "offlineOfficeDetails": {
         "headOffice": "Pune Traffic Police Headquarters, Yerwada, Pune - 411006",
         "wardOffices": [
-          { "name": "Deccan Traffic Division", "address": "Near Goodluck Chowk, FC Road", "phone": "020-25531200" },
-          { "name": "Hinjawadi Traffic Division", "address": "Phase 1 Chowk, Hinjawadi", "phone": "020-22934100" },
-          { "name": "Hadapsar Traffic Division", "address": "Gadital Chowk, Hadapsar", "phone": "020-26991100" }
+          {
+            "name": "Deccan Traffic Division",
+            "address": "Near Goodluck Chowk, FC Road",
+            "phone": "020-25531200"
+          },
+          {
+            "name": "Hinjawadi Traffic Division",
+            "address": "Phase 1 Chowk, Hinjawadi",
+            "phone": "020-22934100"
+          },
+          {
+            "name": "Hadapsar Traffic Division",
+            "address": "Gadital Chowk, Hadapsar",
+            "phone": "020-26991100"
+          }
         ],
         "timings": "24x7 Traffic Control Room.",
         "documentsToCarry": [

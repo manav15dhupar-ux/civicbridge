@@ -5,6 +5,9 @@
  * severity-colored pins, and marker clustering when zoomed out.
  */
 
+import { escapeHtml } from "./ui.js";
+import { GPS_ACCURACY_WARNING_METERS } from "./constants.js";
+
 const PUNE_DEFAULT_LAT = 18.5204;
 const PUNE_DEFAULT_LNG = 73.8567;
 const DEFAULT_ZOOM = 13;
@@ -12,9 +15,8 @@ const DEFAULT_ZOOM = 13;
 let mapInstance = null;
 let userMarker = null;
 let verificationCircle = null; // 200m duplicate radius
-let accuracyCircle = null;     // Browser GPS accuracy radius
+let accuracyCircle = null; // Browser GPS accuracy radius
 let reportMarkersLayer = null; // Leaflet.markerClusterGroup or layerGroup
-let allReports = [];
 let locationChangeCallback = null;
 
 /**
@@ -22,11 +24,36 @@ let locationChangeCallback = null;
  * Colors markers directly by severity rating (1-5).
  */
 const SEVERITY_PIN_STYLES = {
-  5: { color: "#E11D48", label: "Critical Hazard", pulse: true, border: "#881337" },
-  4: { color: "#EA580C", label: "High Hazard", pulse: false, border: "#7C2D12" },
-  3: { color: "#D97706", label: "Moderate Issue", pulse: false, border: "#78350F" },
-  2: { color: "#2563EB", label: "Minor Defect", pulse: false, border: "#1E3A8A" },
-  1: { color: "#64748B", label: "Low Priority", pulse: false, border: "#334155" }
+  5: {
+    color: "#E11D48",
+    label: "Critical Hazard",
+    pulse: true,
+    border: "#881337"
+  },
+  4: {
+    color: "#EA580C",
+    label: "High Hazard",
+    pulse: false,
+    border: "#7C2D12"
+  },
+  3: {
+    color: "#D97706",
+    label: "Moderate Issue",
+    pulse: false,
+    border: "#78350F"
+  },
+  2: {
+    color: "#2563EB",
+    label: "Minor Defect",
+    pulse: false,
+    border: "#1E3A8A"
+  },
+  1: {
+    color: "#64748B",
+    label: "Low Priority",
+    pulse: false,
+    border: "#334155"
+  }
 };
 
 /**
@@ -167,7 +194,8 @@ export function initMap(elementId = "civicMap", onLocationSelect) {
   // High-performance OpenStreetMap tile layer
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | CivicBridge Pune'
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | CivicBridge Pune'
   }).addTo(mapInstance);
 
   // Marker Clustering Layer (Uses Leaflet.markercluster if loaded, otherwise falls back to layerGroup)
@@ -212,7 +240,13 @@ export function initMap(elementId = "civicMap", onLocationSelect) {
  * @param {number|null} [accuracy=null] - Browser GPS accuracy in meters.
  * @param {boolean} [isConfirmed=false] - Whether citizen manually confirmed pin.
  */
-export function setUserLocation(lat, lng, pan = false, accuracy = null, isConfirmed = false) {
+export function setUserLocation(
+  lat,
+  lng,
+  pan = false,
+  accuracy = null,
+  isConfirmed = false
+) {
   const L = window.L;
   if (!mapInstance || !L) return;
 
@@ -279,7 +313,7 @@ export function setUserLocation(lat, lng, pan = false, accuracy = null, isConfir
 
   // Draw or update the Browser Geolocation Accuracy Circle
   if (typeof accuracy === "number" && accuracy > 0) {
-    const isWorseThan50 = accuracy > 50;
+    const isWorseThan50 = accuracy > GPS_ACCURACY_WARNING_METERS;
     const circleOptions = {
       radius: Math.min(accuracy, 2000), // Clamp visual display at 2km max
       color: isWorseThan50 ? "#D97706" : "#0284C7",
@@ -302,7 +336,9 @@ export function setUserLocation(lat, lng, pan = false, accuracy = null, isConfir
   }
 
   if (pan) {
-    mapInstance.setView([lat, lng], Math.max(mapInstance.getZoom(), 15), { animate: true });
+    mapInstance.setView([lat, lng], Math.max(mapInstance.getZoom(), 15), {
+      animate: true
+    });
   }
 }
 
@@ -339,12 +375,14 @@ export function renderReportsOnMap(reports = [], categoryFilter = "all") {
   const L = window.L;
   if (!mapInstance || !L || !reportMarkersLayer) return;
 
-  allReports = reports;
   reportMarkersLayer.clearLayers();
 
-  const filtered = categoryFilter === "all"
-    ? reports
-    : reports.filter((r) => r.category.toLowerCase().includes(categoryFilter.toLowerCase()));
+  const filtered =
+    categoryFilter === "all"
+      ? reports
+      : reports.filter((r) =>
+          r.category.toLowerCase().includes(categoryFilter.toLowerCase())
+        );
 
   for (const rep of filtered) {
     if (typeof rep.lat !== "number" || typeof rep.lng !== "number") continue;
@@ -353,32 +391,34 @@ export function renderReportsOnMap(reports = [], categoryFilter = "all") {
     const icon = createSeverityPin(rep.category, rep.severity);
     const marker = L.marker([rep.lat, rep.lng], { icon });
 
-    const statusBadge = rep.status === "Resolved"
-      ? `<span class="bg-emerald-100 text-emerald-800 text-[11px] px-2 py-0.5 rounded-full font-semibold">Resolved</span>`
-      : rep.status === "In Progress" || rep.status === "Work In Progress"
-      ? `<span class="bg-blue-100 text-blue-800 text-[11px] px-2 py-0.5 rounded-full font-semibold">In Progress</span>`
-      : `<span class="bg-amber-100 text-amber-800 text-[11px] px-2 py-0.5 rounded-full font-semibold">${rep.status}</span>`;
+    const statusBadge =
+      rep.status === "Resolved"
+        ? `<span class="bg-emerald-100 text-emerald-800 text-[11px] px-2 py-0.5 rounded-full font-semibold">Resolved</span>`
+        : rep.status === "In Progress" || rep.status === "Work In Progress"
+          ? `<span class="bg-blue-100 text-blue-800 text-[11px] px-2 py-0.5 rounded-full font-semibold">In Progress</span>`
+          : `<span class="bg-amber-100 text-amber-800 text-[11px] px-2 py-0.5 rounded-full font-semibold">${escapeHtml(rep.status)}</span>`;
 
-    const sevStyle = SEVERITY_PIN_STYLES[rep.severity] || SEVERITY_PIN_STYLES[3];
+    const sevStyle =
+      SEVERITY_PIN_STYLES[rep.severity] || SEVERITY_PIN_STYLES[3];
 
     const popupHtml = `
       <div class="p-1 space-y-2 min-w-[230px] text-xs font-sans">
         <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
-          <span class="font-bold text-slate-500 uppercase tracking-wider text-[10px]">${rep.category}</span>
+          <span class="font-bold text-slate-500 uppercase tracking-wider text-[10px]">${escapeHtml(rep.category)}</span>
           ${statusBadge}
         </div>
         <div class="flex items-center gap-1.5">
           <span class="w-2 h-2 rounded-full" style="background: ${sevStyle.color}"></span>
           <span class="font-bold text-[11px]" style="color: ${sevStyle.color}">Severity ${rep.severity} (${sevStyle.label})</span>
         </div>
-        <h4 class="font-bold text-slate-900 text-sm leading-tight">${rep.subcategory || rep.category}</h4>
-        <p class="text-slate-600 line-clamp-3 leading-snug">${rep.description}</p>
+        <h4 class="font-bold text-slate-900 text-sm leading-tight">${escapeHtml(rep.subcategory || rep.category)}</h4>
+        <p class="text-slate-600 line-clamp-3 leading-snug">${escapeHtml(rep.description)}</p>
         <div class="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
-          <span>📍 ${rep.location_text.split(",")[0]}</span>
-          <span class="font-medium text-slate-700">👥 ${rep.reporter_count || 1} reported</span>
+          <span>📍 ${escapeHtml(rep.location_text.split(",")[0])}</span>
+          <span class="font-medium text-slate-700">👥 ${escapeHtml(rep.reporter_count || 1)} reported</span>
         </div>
         <div class="text-[10px] text-slate-400 font-mono">
-          Ref: ${rep.trackingId || rep.id}
+          Ref: ${escapeHtml(rep.trackingId || rep.id)}
         </div>
       </div>
     `;

@@ -14,6 +14,13 @@ import dotenv from "dotenv";
 import complaintRoutes from "./routes/complaintRoutes.js";
 import authorityRoutes from "./routes/authorityRoutes.js";
 import locationRoutes from "./routes/locationRoutes.js";
+import {
+  ANALYZE_RATE_LIMIT_MAX_REQUESTS,
+  API_RATE_LIMIT_MAX_REQUESTS,
+  API_RATE_LIMIT_WINDOW_MS,
+  REQUEST_BODY_LIMIT
+} from "./config/constants.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 // Load environment variables from .env
 dotenv.config();
@@ -33,11 +40,18 @@ function normalizeOrigin(value) {
   return parsed.origin;
 }
 
-const allowedOrigins = new Set([
-  "http://localhost:3000",
-  ...(process.env.RENDER_EXTERNAL_URL ? [process.env.RENDER_EXTERNAL_URL] : []),
-  ...(process.env.ALLOWED_ORIGINS || "").split(",").map((origin) => origin.trim()).filter(Boolean)
-].map(normalizeOrigin));
+const allowedOrigins = new Set(
+  [
+    "http://localhost:3000",
+    ...(process.env.RENDER_EXTERNAL_URL
+      ? [process.env.RENDER_EXTERNAL_URL]
+      : []),
+    ...(process.env.ALLOWED_ORIGINS || "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+  ].map(normalizeOrigin)
+);
 
 /**
  * Configure Helmet with Content Security Policy and Referrer Policy permitting Tailwind CDN,
@@ -79,7 +93,10 @@ app.use(
   })
 );
 app.use((req, res, next) => {
-  res.setHeader("Permissions-Policy", "camera=(self), geolocation=(self), microphone=(self)");
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(self), geolocation=(self), microphone=(self)"
+  );
   next();
 });
 
@@ -102,7 +119,10 @@ app.use("/api", (req, res, next) => {
     }
 
     const requestHost = req.get("host");
-    const isSameHost = requestHost && new URL(normalizedOrigin).host.toLowerCase() === requestHost.toLowerCase();
+    const isSameHost =
+      requestHost &&
+      new URL(normalizedOrigin).host.toLowerCase() ===
+        requestHost.toLowerCase();
     if (!isSameHost && !allowedOrigins.has(normalizedOrigin)) {
       return res.status(403).json({
         success: false,
@@ -115,15 +135,15 @@ app.use("/api", (req, res, next) => {
   cors({ origin: origin || false, credentials: false })(req, res, next);
 });
 
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: REQUEST_BODY_LIMIT }));
 
 /**
  * General API rate limiter — 120 requests per 15 minutes per IP.
  */
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 120,
+  windowMs: API_RATE_LIMIT_WINDOW_MS,
+  max: API_RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { trustProxy: false, xForwardedForHeader: false, default: false },
@@ -137,14 +157,15 @@ const apiLimiter = rateLimit({
  * Stricter rate limiter for the AI analysis endpoint to prevent cost abuse — 20 per 15 minutes.
  */
 const analyzeLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
+  windowMs: API_RATE_LIMIT_WINDOW_MS,
+  max: ANALYZE_RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { trustProxy: false, xForwardedForHeader: false, default: false },
   message: {
     success: false,
-    error: "Complaint analysis rate limit reached. Please wait 15 minutes before submitting again."
+    error:
+      "Complaint analysis rate limit reached. Please wait 15 minutes before submitting again."
   }
 });
 
@@ -163,7 +184,10 @@ app.get("/health", (req, res) => {
     environment: process.env.NODE_ENV || "development",
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
-    geminiConfigured: Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "your_gemini_api_key_here")
+    geminiConfigured: Boolean(
+      process.env.GEMINI_API_KEY &&
+      process.env.GEMINI_API_KEY !== "your_gemini_api_key_here"
+    )
   });
 });
 
@@ -185,57 +209,13 @@ app.get("*", (req, res, next) => {
   res.sendFile(path.join(projectRoot, "public", "index.html"));
 });
 
-/**
- * Centralized Express Error Handling Middleware.
- * Catches unhandled synchronous and asynchronous pipeline errors.
- * Never exposes internal stack traces or raw error messages in production.
- */
-// eslint-disable-next-line no-unused-vars
-app.use((err, req, res, next) => {
-  const statusCode = err.status || err.statusCode || 500;
-
-  // Scrub any API keys from err.message before logging
-  const apiKey = process.env.GEMINI_API_KEY;
-  let cleanMessage = err.message || "An unexpected error occurred.";
-  if (apiKey && typeof apiKey === "string" && apiKey.trim().length > 0) {
-    cleanMessage = cleanMessage.replaceAll(apiKey, "[REDACTED_API_KEY]");
-  }
-  cleanMessage = cleanMessage.replace(/([?&]key=)[^&\s"`']+/gi, "$1[REDACTED_API_KEY]");
-  cleanMessage = cleanMessage.replace(/AIza[0-9A-Za-z-_]{35}/g, "[REDACTED_API_KEY]");
-
-  // Log the full error server-side for debugging (never sent to client)
-  console.error(`[ERROR] ${req.method} ${req.path} →`, {
-    message: cleanMessage,
-    code: err.code,
-    status: statusCode
-  });
-
-  // If error has a userFacing flag, return its friendly message
-  const clientMessage = (err.isUserFacing && err.userMessage)
-    ? err.userMessage
-    : (process.env.NODE_ENV === "development"
-      ? cleanMessage
-      : "An error occurred while processing your request.");
-
-  res.status(statusCode).json({
-    success: false,
-    error: clientMessage,
-    code: err.code || "INTERNAL_SERVER_ERROR"
-  });
-});
+app.use(errorHandler);
 
 /**
  * Starts the HTTP server if not being imported for automated tests.
  */
 if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, () => {
-    console.log(`====================================================`);
-    console.log(` CivicBridge Server Running`);
-    console.log(` Local URL: http://localhost:${PORT}`);
-    console.log(` Health:    http://localhost:${PORT}/health`);
-    console.log(` Target:    Pune Municipal Corporation (PMC) Region`);
-    console.log(`====================================================`);
-  });
+  app.listen(PORT);
 }
 
 export default app;

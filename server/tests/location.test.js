@@ -5,8 +5,11 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { reverseGeocode, resolveNearestPuneLandmark } from "../services/locationService.js";
-import { isWithinPune, PUNE_BOUNDS, calculateHaversineDistance } from "../utils/geo.js";
+import {
+  reverseGeocode,
+  resolveNearestPuneLandmark
+} from "../services/locationService.js";
+import { isWithinPune, PUNE_BOUNDS } from "../utils/geo.js";
 import locationRoutes from "../routes/locationRoutes.js";
 
 /**
@@ -47,7 +50,10 @@ describe("Location & Reverse Geocoding Services", () => {
     // Coordinate near FC Road (18.5284, 73.8423)
     const result = resolveNearestPuneLandmark(18.5285, 73.8422);
 
-    assert.ok(result.landmark.includes("FC Road") || result.address.includes("Shivajinagar"));
+    assert.ok(
+      result.landmark.includes("FC Road") ||
+        result.address.includes("Shivajinagar")
+    );
     assert.equal(result.distanceMeters < 50, true);
     assert.equal(result.details.city, "Pune");
     assert.equal(result.details.state, "Maharashtra");
@@ -69,10 +75,10 @@ describe("Location & Reverse Geocoding Services", () => {
   });
 
   it("isWithinPune should return false for coordinates outside Pune municipal region", () => {
-    assert.equal(isWithinPune(19.0760, 72.8777), false); // Mumbai
-    assert.equal(isWithinPune(28.6139, 77.2090), false); // New Delhi
+    assert.equal(isWithinPune(19.076, 72.8777), false); // Mumbai
+    assert.equal(isWithinPune(28.6139, 77.209), false); // New Delhi
     assert.equal(isWithinPune(12.9716, 77.5946), false); // Bengaluru
-    assert.equal(isWithinPune(18.5204, 73.8567), true);  // Pune PMC
+    assert.equal(isWithinPune(18.5204, 73.8567), true); // Pune PMC
   });
 });
 

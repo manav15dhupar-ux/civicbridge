@@ -31,7 +31,11 @@ describe("Security Hardening - Strict Input Validation", () => {
     assert.equal(result.success, false);
     if (!result.success) {
       const messages = result.error.issues.map((i) => i.message);
-      assert.ok(messages.some((m) => m.includes("unrecognized") || m.includes("Unrecognized")));
+      assert.ok(
+        messages.some(
+          (m) => m.includes("unrecognized") || m.includes("Unrecognized")
+        )
+      );
     }
   });
 
@@ -66,7 +70,10 @@ describe("Security Hardening - Strict Input Validation", () => {
       lng: 73.85,
       responsible_authority: "ISRO"
     };
-    assert.equal(StructuredReportSchema.safeParse(invalidReport).success, false);
+    assert.equal(
+      StructuredReportSchema.safeParse(invalidReport).success,
+      false
+    );
 
     const reportWithExtraField = {
       category: "Roads & Footpaths",
@@ -79,7 +86,10 @@ describe("Security Hardening - Strict Input Validation", () => {
       responsible_authority: "PMC Road Department",
       hackedField: "drop database"
     };
-    assert.equal(StructuredReportSchema.safeParse(reportWithExtraField).success, false);
+    assert.equal(
+      StructuredReportSchema.safeParse(reportWithExtraField).success,
+      false
+    );
   });
 
   it("DraftLetterRequestSchema and FileComplaintRequestSchema should reject unknown fields", () => {
@@ -89,7 +99,7 @@ describe("Security Hardening - Strict Input Validation", () => {
       severity: 3,
       description: "Drain overflowing onto walkway",
       location_text: "Kothrud, Pune",
-      lat: 18.50,
+      lat: 18.5,
       lng: 73.81,
       responsible_authority: "PMC Drainage Department"
     };
@@ -99,25 +109,35 @@ describe("Security Hardening - Strict Input Validation", () => {
       language: "en",
       maliciousParameter: "bypass"
     };
-    assert.equal(DraftLetterRequestSchema.safeParse(draftWithExtra).success, false);
+    assert.equal(
+      DraftLetterRequestSchema.safeParse(draftWithExtra).success,
+      false
+    );
 
     const fileWithExtra = {
       report: validReport,
       citizenNote: "Please expedite",
       unknownPayload: 12345
     };
-    assert.equal(FileComplaintRequestSchema.safeParse(fileWithExtra).success, false);
+    assert.equal(
+      FileComplaintRequestSchema.safeParse(fileWithExtra).success,
+      false
+    );
   });
 });
 
 describe("Security Hardening - File Magic Bytes & EXIF Sanitization", () => {
   it("detectMimeTypeFromMagicBytes should detect real JPEG, PNG, and PDF signatures", () => {
     // Valid JPEG header
-    const jpegBuffer = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46]);
+    const jpegBuffer = Buffer.from([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46
+    ]);
     assert.equal(detectMimeTypeFromMagicBytes(jpegBuffer), "image/jpeg");
 
     // Valid PNG header
-    const pngBuffer = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00]);
+    const pngBuffer = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00
+    ]);
     assert.equal(detectMimeTypeFromMagicBytes(pngBuffer), "image/png");
 
     // Valid PDF header
@@ -131,7 +151,9 @@ describe("Security Hardening - File Magic Bytes & EXIF Sanitization", () => {
     assert.equal(detectMimeTypeFromMagicBytes(fakeScript), null);
 
     // Windows PE executable header
-    const exeBuffer = Buffer.from([0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]);
+    const exeBuffer = Buffer.from([
+      0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00
+    ]);
     assert.equal(detectMimeTypeFromMagicBytes(exeBuffer), null);
   });
 
@@ -148,34 +170,45 @@ describe("Security Hardening - File Magic Bytes & EXIF Sanitization", () => {
 
   it("stripExifMetadata should remove APP1 EXIF segment from JPEG", () => {
     // Construct minimal JPEG with APP1 (0xFFE1) EXIF segment
-    const soi = Buffer.from([0xFF, 0xD8]);
-    const app1Marker = Buffer.from([0xFF, 0xE1]);
+    const soi = Buffer.from([0xff, 0xd8]);
+    const app1Marker = Buffer.from([0xff, 0xe1]);
     const app1Data = Buffer.from("Exif\0\0SecretCameraGpsData");
     const app1Length = Buffer.alloc(2);
     app1Length.writeUInt16BE(app1Data.length + 2, 0);
 
-    const sos = Buffer.from([0xFF, 0xDA, 0x00, 0x02, 0x00, 0x00]);
-    const eoi = Buffer.from([0xFF, 0xD9]);
+    const sos = Buffer.from([0xff, 0xda, 0x00, 0x02, 0x00, 0x00]);
+    const eoi = Buffer.from([0xff, 0xd9]);
 
-    const jpegWithExif = Buffer.concat([soi, app1Marker, app1Length, app1Data, sos, eoi]);
+    const jpegWithExif = Buffer.concat([
+      soi,
+      app1Marker,
+      app1Length,
+      app1Data,
+      sos,
+      eoi
+    ]);
     const cleaned = stripExifMetadata(jpegWithExif, "image/jpeg");
 
     // Cleaned buffer should NOT contain the EXIF marker
     assert.equal(cleaned.includes(Buffer.from("SecretCameraGpsData")), false);
     // SOI and EOI must remain intact
-    assert.equal(cleaned[0], 0xFF);
-    assert.equal(cleaned[1], 0xD8);
-    assert.equal(cleaned[cleaned.length - 2], 0xFF);
-    assert.equal(cleaned[cleaned.length - 1], 0xD9);
+    assert.equal(cleaned[0], 0xff);
+    assert.equal(cleaned[1], 0xd8);
+    assert.equal(cleaned[cleaned.length - 2], 0xff);
+    assert.equal(cleaned[cleaned.length - 1], 0xd9);
   });
 });
 
 describe("Security Hardening - PII Redaction Integrity", () => {
   it("should redact email addresses properly", () => {
-    const input = "Contact the ward engineer at sachin.deshmukh@pmc.gov.in or citizen@gmail.com";
+    const input =
+      "Contact the ward engineer at sachin.deshmukh@pmc.gov.in or citizen@gmail.com";
     const result = redactSensitiveData(input);
 
-    assert.equal(result.cleanedText.includes("sachin.deshmukh@pmc.gov.in"), false);
+    assert.equal(
+      result.cleanedText.includes("sachin.deshmukh@pmc.gov.in"),
+      false
+    );
     assert.equal(result.cleanedText.includes("citizen@gmail.com"), false);
     assert.equal(result.redactionCounts.email, 2);
     assert.ok(result.cleanedText.includes("@pmc.gov.in"));
@@ -183,12 +216,16 @@ describe("Security Hardening - PII Redaction Integrity", () => {
   });
 
   it("redactionLog must NEVER store raw PII (zero PII storage guarantee)", () => {
-    const sensitiveInput = "My Aadhaar is 9988 7766 5544 and phone is 9876543210 and email is secret@civic.in";
+    const sensitiveInput =
+      "My Aadhaar is 9988 7766 5544 and phone is 9876543210 and email is secret@civic.in";
     const result = redactSensitiveData(sensitiveInput);
 
     // Verify raw values do not appear in any redaction log entry
     for (const log of result.redactionLog) {
-      assert.equal(Object.prototype.hasOwnProperty.call(log, "original"), false);
+      assert.equal(
+        Object.prototype.hasOwnProperty.call(log, "original"),
+        false
+      );
       assert.equal(log.masked.includes("9988 7766 5544"), false);
       assert.equal(log.masked.includes("9876543210"), false);
       assert.equal(log.masked.includes("secret@civic.in"), false);

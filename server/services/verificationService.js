@@ -8,6 +8,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { calculateHaversineDistance } from "../utils/geo.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { DUPLICATE_DISTANCE_THRESHOLD_METERS } from "../config/constants.js";
+import { AppError } from "../utils/appError.js";
 
 /**
  * Path to the verified civic reports database.
@@ -18,7 +20,7 @@ const REPORTS_FILE_PATH = path.resolve(process.cwd(), "data", "reports.json");
  * Maximum distance threshold in meters to consider an existing report a spatial duplicate.
  * @constant {number}
  */
-export const DUPLICATE_DISTANCE_THRESHOLD_METERS = 200;
+export { DUPLICATE_DISTANCE_THRESHOLD_METERS } from "../config/constants.js";
 
 /**
  * Reads all stored civic reports from data/reports.json.
@@ -29,8 +31,11 @@ export async function getExistingReports() {
     const raw = await fs.readFile(REPORTS_FILE_PATH, "utf-8");
     return JSON.parse(raw);
   } catch (error) {
-    console.error("Failed to read reports.json:", error.message);
-    return [];
+    throw new AppError("Failed to read reports.json.", {
+      code: "REPORT_STORE_UNAVAILABLE",
+      userMessage: "Civic reports are temporarily unavailable.",
+      cause: error
+    });
   }
 }
 
@@ -42,7 +47,11 @@ export async function getExistingReports() {
 export async function appendReport(newReport) {
   const reports = await getExistingReports();
   reports.unshift(newReport);
-  await fs.writeFile(REPORTS_FILE_PATH, JSON.stringify(reports, null, 2), "utf-8");
+  await fs.writeFile(
+    REPORTS_FILE_PATH,
+    JSON.stringify(reports, null, 2),
+    "utf-8"
+  );
   return newReport;
 }
 
@@ -88,7 +97,9 @@ async function computeSemanticSimilarity(newText, existingText) {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash"
+    });
     const prompt = `Compare these two civic complaints in Pune and rate their semantic issue similarity from 0.0 to 1.0.
 Complaint A: "${newText}"
 Complaint B: "${existingText}"
@@ -96,7 +107,9 @@ Reply ONLY with a decimal number between 0.0 and 1.0.`;
 
     const result = await model.generateContent(prompt);
     const rawVal = parseFloat(result.response.text().trim());
-    return Number.isNaN(rawVal) ? computeLexicalSimilarity(newText, existingText) : Math.min(Math.max(rawVal, 0), 1);
+    return Number.isNaN(rawVal)
+      ? computeLexicalSimilarity(newText, existingText)
+      : Math.min(Math.max(rawVal, 0), 1);
   } catch {
     return computeLexicalSimilarity(newText, existingText);
   }
@@ -136,8 +149,12 @@ export async function verifyComplaint(candidate) {
     // Check spatial proximity within 200m
     if (distanceMeters <= DUPLICATE_DISTANCE_THRESHOLD_METERS) {
       const isSameCategory =
-        candidate.category.toLowerCase() === (existing.category || "").toLowerCase() ||
-        (candidate.subcategory && existing.subcategory && candidate.subcategory.toLowerCase() === existing.subcategory.toLowerCase());
+        candidate.category.toLowerCase() ===
+          (existing.category || "").toLowerCase() ||
+        (candidate.subcategory &&
+          existing.subcategory &&
+          candidate.subcategory.toLowerCase() ===
+            existing.subcategory.toLowerCase());
 
       const similarity = await computeSemanticSimilarity(
         candidate.description,
@@ -168,13 +185,12 @@ export async function verifyComplaint(candidate) {
   // Sort by closest distance
   matchingList.sort((a, b) => a.distanceMeters - b.distanceMeters);
 
-  let verificationScore = 75; // Baseline initial trust for structured submission with evidence
-  let verificationLabel = "Moderate (First Report in Vicinity)";
-  let reason = "";
+  let verificationScore;
+  let verificationLabel;
+  let reason;
 
   if (matchingList.length > 0) {
     const closest = matchingList[0];
-    const isVeryClose = closest.distanceMeters < 80;
 
     if (totalOtherReporters >= 5) {
       verificationScore = 96;
@@ -193,7 +209,7 @@ export async function verifyComplaint(candidate) {
     // Check if within Pune geographic boundary
     verificationScore = 78;
     verificationLabel = "New Incident (Awaiting Community Upvotes)";
-    reason = `No duplicate reports found within 200 meters. Geographically validated in Pune municipal zone; logged as primary incident.`;
+    reason = `No duplicate reports found within ${DUPLICATE_DISTANCE_THRESHOLD_METERS} meters. Geographically validated in Pune municipal zone; logged as primary incident.`;
   }
 
   return {

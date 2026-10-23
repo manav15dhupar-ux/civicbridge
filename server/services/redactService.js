@@ -29,7 +29,8 @@ const PATTERNS = {
   vehiclePlate: /\b(MH[\s-]?[0-9]{1,2}[\s-]?[A-Z]{1,3}[\s-]?[0-9]{1,4})\b/gi,
 
   // Personal name declaration markers in English, Hindi, and Marathi
-  nameIntroEn: /(?:my\s+name\s+is|i\s+am|reported\s+by|complainant(?:\s+is)?)\s+(?!(?:aadhaar|phone|email|number|mobile|id|officer)\b)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/gi,
+  nameIntroEn:
+    /(?:my\s+name\s+is|i\s+am|reported\s+by|complainant(?:\s+is)?)\s+(?!(?:aadhaar|phone|email|number|mobile|id|officer)\b)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/gi,
   nameIntroHi: /(?:मेरा\s+नाम|शिकायतकर्ता(?:\s+का\s+नाम)?)\s+([^\s,.]+)/gi,
   nameIntroMr: /(?:(?:माझे|माझं)\s+नाव|तक्रारदार(?:\s+नाव)?)\s+([^\s,.]+)/gi
 };
@@ -52,7 +53,8 @@ function maskAadhaar(match) {
  */
 function maskPhone(match) {
   const digits = match.replace(/\D/g, "");
-  const cleanDigits = digits.startsWith("91") && digits.length === 12 ? digits.slice(2) : digits;
+  const cleanDigits =
+    digits.startsWith("91") && digits.length === 12 ? digits.slice(2) : digits;
   if (cleanDigits.length === 10) {
     return `+91 ${cleanDigits.slice(0, 2)}***-**${cleanDigits.slice(-2)}`;
   }
@@ -67,7 +69,8 @@ function maskPhone(match) {
 function maskEmail(email) {
   const [user, domain] = email.split("@");
   if (!user || !domain) return "[REDACTED-EMAIL]";
-  const maskedUser = user.length <= 2 ? `${user[0]}*` : `${user[0]}***${user[user.length - 1]}`;
+  const maskedUser =
+    user.length <= 2 ? `${user[0]}*` : `${user[0]}***${user[user.length - 1]}`;
   return `${maskedUser}@${domain}`;
 }
 
@@ -93,7 +96,15 @@ function maskVehiclePlate(match) {
  * }}
  */
 export function redactSensitiveData(text) {
-  const emptyCounts = { aadhaar: 0, phone: 0, email: 0, vehiclePlate: 0, name: 0, pan: 0, total: 0 };
+  const emptyCounts = {
+    aadhaar: 0,
+    phone: 0,
+    email: 0,
+    vehiclePlate: 0,
+    name: 0,
+    pan: 0,
+    total: 0
+  };
   if (typeof text !== "string" || !text.trim()) {
     return { cleanedText: "", redactionCounts: emptyCounts, redactionLog: [] };
   }

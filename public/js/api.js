@@ -13,7 +13,9 @@ async function request(endpoint, options = {}) {
     const res = await fetch(endpoint, options);
     const data = await res.json();
     if (!res.ok) {
-      const errorMsg = data.errors ? data.errors.join(", ") : data.error || `HTTP ${res.status}`;
+      const errorMsg = data.errors
+        ? data.errors.join(", ")
+        : data.error || `HTTP ${res.status}`;
       throw new Error(errorMsg);
     }
     return data;
@@ -104,7 +106,9 @@ export async function fetchAuthorities() {
  * @returns {Promise<{ address: string, details: object, isWithinPune: boolean, confidenceBadge: object }>}
  */
 export async function fetchReverseGeocode(lat, lng) {
-  const result = await request(`/api/location/reverse-geocode?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`);
+  const result = await request(
+    `/api/location/reverse-geocode?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`
+  );
   return result.data;
 }
 

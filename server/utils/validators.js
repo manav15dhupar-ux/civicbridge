@@ -4,12 +4,24 @@
  */
 
 import { z } from "zod";
+import {
+  BYTES_PER_MEGABYTE,
+  MAX_AUTHORITY_NAME_LENGTH,
+  MAX_CITIZEN_NOTE_LENGTH,
+  MAX_COMPLAINT_TEXT_LENGTH,
+  MAX_EVIDENCE_SUMMARY_LENGTH,
+  MAX_FILE_SIZE_BYTES,
+  MAX_FILE_SIZE_MEGABYTES,
+  MAX_LOCATION_TEXT_LENGTH,
+  MAX_REPORT_DESCRIPTION_LENGTH,
+  MAX_REPORT_LOCATION_LENGTH,
+  MAX_REPORT_SUBCATEGORY_LENGTH,
+  MAX_URGENCY_REASON_LENGTH,
+  MIN_REPORT_DESCRIPTION_LENGTH,
+  MIN_REPORT_LOCATION_LENGTH
+} from "../config/constants.js";
 
-/**
- * Maximum allowed media upload size in bytes (20 MB).
- * @constant {number}
- */
-export const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+export { MAX_FILE_SIZE_BYTES } from "../config/constants.js";
 
 /**
  * Allowed MIME types for complaint media evidence.
@@ -60,7 +72,7 @@ export function detectMimeTypeFromMagicBytes(buffer) {
   }
 
   // JPEG: FF D8 FF
-  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
     return "image/jpeg";
   }
 
@@ -69,18 +81,23 @@ export function detectMimeTypeFromMagicBytes(buffer) {
     buffer.length >= 8 &&
     buffer[0] === 0x89 &&
     buffer[1] === 0x50 &&
-    buffer[2] === 0x4E &&
+    buffer[2] === 0x4e &&
     buffer[3] === 0x47 &&
-    buffer[4] === 0x0D &&
-    buffer[5] === 0x0A &&
-    buffer[6] === 0x1A &&
-    buffer[7] === 0x0A
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
   ) {
     return "image/png";
   }
 
   // PDF: %PDF (25 50 44 46)
-  if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
+  if (
+    buffer[0] === 0x25 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x44 &&
+    buffer[3] === 0x46
+  ) {
     return "application/pdf";
   }
 
@@ -103,10 +120,10 @@ export function detectMimeTypeFromMagicBytes(buffer) {
 
   // WebM / EBML: 1A 45 DF A3
   if (
-    buffer[0] === 0x1A &&
+    buffer[0] === 0x1a &&
     buffer[1] === 0x45 &&
-    buffer[2] === 0xDF &&
-    buffer[3] === 0xA3
+    buffer[2] === 0xdf &&
+    buffer[3] === 0xa3
   ) {
     return "video/webm";
   }
@@ -120,7 +137,10 @@ export function detectMimeTypeFromMagicBytes(buffer) {
   if (buffer.subarray(0, 3).toString("ascii") === "ID3") {
     return "audio/mpeg";
   }
-  if (buffer[0] === 0xFF && (buffer[1] === 0xFB || buffer[1] === 0xF3 || buffer[1] === 0xF2)) {
+  if (
+    buffer[0] === 0xff &&
+    (buffer[1] === 0xfb || buffer[1] === 0xf3 || buffer[1] === 0xf2)
+  ) {
     return "audio/mpeg";
   }
 
@@ -151,7 +171,10 @@ export function normalizeMimeType(mime, isAudio = false) {
   if (clean === "image/jpg" || clean === "image/pjpeg") return "image/jpeg";
   if (clean === "audio/mpeg" || clean === "audio/mpga") return "audio/mp3";
   if (clean === "audio/x-wav") return "audio/wav";
-  if (isAudio && (clean === "video/webm" || clean === "application/octet-stream")) {
+  if (
+    isAudio &&
+    (clean === "video/webm" || clean === "application/octet-stream")
+  ) {
     return "audio/webm";
   }
   return clean;
@@ -169,7 +192,11 @@ export function stripExifMetadata(buffer, detectedMime) {
 
   try {
     // 1. JPEG EXIF Stripping (APP1 marker 0xFFE1)
-    if (detectedMime === "image/jpeg" && buffer[0] === 0xFF && buffer[1] === 0xD8) {
+    if (
+      detectedMime === "image/jpeg" &&
+      buffer[0] === 0xff &&
+      buffer[1] === 0xd8
+    ) {
       const chunks = [];
       chunks.push(buffer.subarray(0, 2)); // Keep SOI 0xFF, 0xD8
       let pos = 2;
@@ -177,21 +204,21 @@ export function stripExifMetadata(buffer, detectedMime) {
 
       while (pos < buffer.length - 1) {
         // Skip fill bytes
-        while (pos < buffer.length && buffer[pos] === 0xFF) pos++;
+        while (pos < buffer.length && buffer[pos] === 0xff) pos++;
         if (pos >= buffer.length) break;
 
         const marker = buffer[pos++];
 
         // Stop at Start of Scan (SOS 0xFFDA) or EOI (0xFFD9)
-        if (marker === 0xDA || marker === 0xD9) {
-          chunks.push(Buffer.from([0xFF, marker]));
+        if (marker === 0xda || marker === 0xd9) {
+          chunks.push(Buffer.from([0xff, marker]));
           chunks.push(buffer.subarray(pos));
           return Buffer.concat(chunks);
         }
 
         // Standalone markers without length: RST0-RST7 (0xD0-0xD7), SOI (0xD8), TEM (0x01)
-        if ((marker >= 0xD0 && marker <= 0xD7) || marker === 0x01) {
-          chunks.push(Buffer.from([0xFF, marker]));
+        if ((marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) {
+          chunks.push(Buffer.from([0xff, marker]));
           continue;
         }
 
@@ -210,7 +237,7 @@ export function stripExifMetadata(buffer, detectedMime) {
         const segmentEnd = pos + length;
 
         // Skip APP1 EXIF segment (0xFFE1)
-        if (marker === 0xE1) {
+        if (marker === 0xe1) {
           strippedAny = true;
           pos = segmentEnd;
           continue;
@@ -243,7 +270,9 @@ export function stripExifMetadata(buffer, detectedMime) {
           break;
         }
 
-        const chunkType = buffer.subarray(offset + 4, offset + 8).toString("ascii");
+        const chunkType = buffer
+          .subarray(offset + 4, offset + 8)
+          .toString("ascii");
 
         if (metadataChunkTypes.has(chunkType)) {
           strippedAny = true;
@@ -261,7 +290,7 @@ export function stripExifMetadata(buffer, detectedMime) {
 
       return strippedAny ? Buffer.concat(strippedChunks) : buffer;
     }
-  } catch (err) {
+  } catch {
     // If parsing fails, return original buffer safely
     return buffer;
   }
@@ -284,7 +313,7 @@ export function validateUploadedFile(file, isAudio = false) {
   if (file.size > MAX_FILE_SIZE_BYTES) {
     return {
       valid: false,
-      error: `File size exceeds the 20MB limit (uploaded: ${(file.size / (1024 * 1024)).toFixed(2)} MB).`
+      error: `File size exceeds the ${MAX_FILE_SIZE_MEGABYTES}MB limit (uploaded: ${(file.size / BYTES_PER_MEGABYTE).toFixed(2)} MB).`
     };
   }
 
@@ -301,7 +330,10 @@ export function validateUploadedFile(file, isAudio = false) {
   const sanitized = stripExifMetadata(file.buffer, realMime);
 
   // Compute clean canonical MIME
-  const canonicalMime = normalizeMimeType(isAudio ? (file.mimetype || realMime) : realMime, isAudio);
+  const canonicalMime = normalizeMimeType(
+    isAudio ? file.mimetype || realMime : realMime,
+    isAudio
+  );
 
   return {
     valid: true,
@@ -315,76 +347,135 @@ export function validateUploadedFile(file, isAudio = false) {
  * Strict Zod Schema for Analyze Request.
  * Rejects unknown fields.
  */
-export const AnalyzePayloadSchema = z.object({
-  text: z.string().max(4000, "Text must not exceed 4000 characters").optional().default(""),
-  consent: z.union([
-    z.boolean(),
-    z.literal("true"),
-    z.literal("1"),
-    z.literal(1)
-  ]).refine((val) => val === true || val === "true" || val === "1" || val === 1, {
-    message: "Citizen privacy consent is required."
-  }),
-  lat: z.union([z.number(), z.string()]).optional().transform((val) => {
-    if (val === undefined || val === "") return undefined;
-    return typeof val === "number" ? val : parseFloat(val);
-  }).refine((val) => val === undefined || (!Number.isNaN(val) && val >= -90 && val <= 90), {
-    message: "Invalid latitude (-90 to 90)."
-  }),
-  lng: z.union([z.number(), z.string()]).optional().transform((val) => {
-    if (val === undefined || val === "") return undefined;
-    return typeof val === "number" ? val : parseFloat(val);
-  }).refine((val) => val === undefined || (!Number.isNaN(val) && val >= -180 && val <= 180), {
-    message: "Invalid longitude (-180 to 180)."
-  }),
-  location_text: z.string().max(400, "Location text must not exceed 400 characters").optional()
-}).strict();
+export const AnalyzePayloadSchema = z
+  .object({
+    text: z
+      .string()
+      .max(
+        MAX_COMPLAINT_TEXT_LENGTH,
+        `Text must not exceed ${MAX_COMPLAINT_TEXT_LENGTH} characters`
+      )
+      .optional()
+      .default(""),
+    consent: z
+      .union([z.boolean(), z.literal("true"), z.literal("1"), z.literal(1)])
+      .refine(
+        (val) => val === true || val === "true" || val === "1" || val === 1,
+        {
+          message: "Citizen privacy consent is required."
+        }
+      ),
+    lat: z
+      .union([z.number(), z.string()])
+      .optional()
+      .transform((val) => {
+        if (val === undefined || val === "") return undefined;
+        return typeof val === "number" ? val : parseFloat(val);
+      })
+      .refine(
+        (val) =>
+          val === undefined || (!Number.isNaN(val) && val >= -90 && val <= 90),
+        {
+          message: "Invalid latitude (-90 to 90)."
+        }
+      ),
+    lng: z
+      .union([z.number(), z.string()])
+      .optional()
+      .transform((val) => {
+        if (val === undefined || val === "") return undefined;
+        return typeof val === "number" ? val : parseFloat(val);
+      })
+      .refine(
+        (val) =>
+          val === undefined ||
+          (!Number.isNaN(val) && val >= -180 && val <= 180),
+        {
+          message: "Invalid longitude (-180 to 180)."
+        }
+      ),
+    location_text: z
+      .string()
+      .max(
+        MAX_LOCATION_TEXT_LENGTH,
+        `Location text must not exceed ${MAX_LOCATION_TEXT_LENGTH} characters`
+      )
+      .optional()
+  })
+  .strict();
 
 /**
  * Strict Zod Schema for Complaint Report.
  * Enforces valid category, severity 1-5, and string bounds.
  */
-export const StructuredReportSchema = z.object({
-  category: z.enum([
-    "Roads & Footpaths",
-    "Drainage & Sewage",
-    "Garbage & Waste",
-    "Street Lighting & Electricity",
-    "Water Supply",
-    "Public Health & Sanitation",
-    "Traffic & Obstructions",
-    "Other"
-  ]),
-  subcategory: z.string().min(1).max(100),
-  severity: z.number().int().min(1).max(5),
-  description: z.string().min(3).max(4000),
-  location_text: z.string().min(2).max(300),
-  lat: z.number().min(-90).max(90),
-  lng: z.number().min(-180).max(180),
-  evidence_summary: z.string().max(2000).optional().default(""),
-  urgency_reason: z.string().max(2000).optional().default(""),
-  responsible_authority: z.string().min(2).max(300),
-  confidence: z.number().min(0).max(1).optional().default(0.9)
-}).strict();
+export const StructuredReportSchema = z
+  .object({
+    category: z.enum([
+      "Roads & Footpaths",
+      "Drainage & Sewage",
+      "Garbage & Waste",
+      "Street Lighting & Electricity",
+      "Water Supply",
+      "Public Health & Sanitation",
+      "Traffic & Obstructions",
+      "Other"
+    ]),
+    subcategory: z.string().min(1).max(MAX_REPORT_SUBCATEGORY_LENGTH),
+    severity: z.number().int().min(1).max(5),
+    description: z
+      .string()
+      .min(MIN_REPORT_DESCRIPTION_LENGTH)
+      .max(MAX_REPORT_DESCRIPTION_LENGTH),
+    location_text: z
+      .string()
+      .min(MIN_REPORT_LOCATION_LENGTH)
+      .max(MAX_REPORT_LOCATION_LENGTH),
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    evidence_summary: z
+      .string()
+      .max(MAX_EVIDENCE_SUMMARY_LENGTH)
+      .optional()
+      .default(""),
+    urgency_reason: z
+      .string()
+      .max(MAX_URGENCY_REASON_LENGTH)
+      .optional()
+      .default(""),
+    responsible_authority: z.string().min(2).max(MAX_AUTHORITY_NAME_LENGTH),
+    confidence: z.number().min(0).max(1).optional().default(0.9)
+  })
+  .strict();
 
 /**
  * Strict Zod Schema for Letter Drafting.
  * Rejects unknown fields.
  */
-export const DraftLetterRequestSchema = z.object({
-  report: StructuredReportSchema,
-  language: z.enum(["en", "mr", "hi"]).default("en")
-}).strict();
+export const DraftLetterRequestSchema = z
+  .object({
+    report: StructuredReportSchema,
+    language: z.enum(["en", "mr", "hi"]).default("en")
+  })
+  .strict();
 
 /**
  * Strict Zod Schema for File Complaint Request.
  * Rejects unknown fields.
  */
-export const FileComplaintRequestSchema = z.object({
-  report: StructuredReportSchema,
-  actionPlan: z.object({}).passthrough().optional(),
-  citizenNote: z.string().max(1000, "Citizen note must not exceed 1000 characters").optional().default("")
-}).strict();
+export const FileComplaintRequestSchema = z
+  .object({
+    report: StructuredReportSchema,
+    actionPlan: z.object({}).passthrough().optional(),
+    citizenNote: z
+      .string()
+      .max(
+        MAX_CITIZEN_NOTE_LENGTH,
+        `Citizen note must not exceed ${MAX_CITIZEN_NOTE_LENGTH} characters`
+      )
+      .optional()
+      .default("")
+  })
+  .strict();
 
 /**
  * Validates complaint intake payload (FormData & files).
@@ -403,12 +494,15 @@ export function validateComplaintInput(payload = {}, file, audioFile) {
     }
   }
 
-  const hasText = typeof payload.text === "string" && payload.text.trim().length > 0;
+  const hasText =
+    typeof payload.text === "string" && payload.text.trim().length > 0;
   const hasFile = Boolean(file);
   const hasAudio = Boolean(audioFile);
 
   if (!hasText && !hasFile && !hasAudio) {
-    errors.push("Please provide at least a text description, a voice recording, or photo/document evidence.");
+    errors.push(
+      "Please provide at least a text description, a voice recording, or photo/document evidence."
+    );
   }
 
   if (file) {

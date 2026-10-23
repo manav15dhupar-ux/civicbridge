@@ -9,10 +9,12 @@ import assert from "node:assert/strict";
 import {
   classifyGeminiError,
   GeminiServiceError,
-  analyzeWithGemini,
-  fallbackAnalyzeComplaint
+  analyzeWithGemini
 } from "../services/geminiService.js";
-import { normalizeMimeType, validateComplaintInput } from "../utils/validators.js";
+import {
+  normalizeMimeType,
+  validateComplaintInput
+} from "../utils/validators.js";
 import complaintRoutes from "../routes/complaintRoutes.js";
 
 /**
@@ -94,7 +96,9 @@ describe("Gemini Multimodal Input Intake & Normalization", () => {
 
   it("should validate and structure PDF document evidence input", async () => {
     // Valid PDF buffer signature (%PDF)
-    const pdfBuffer = Buffer.from("%PDF-1.4\n1 0 obj\n<< /Title (Civic Notice: Contaminated Water Supply in Baner) >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF");
+    const pdfBuffer = Buffer.from(
+      "%PDF-1.4\n1 0 obj\n<< /Title (Civic Notice: Contaminated Water Supply in Baner) >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF"
+    );
     const mockPdfFile = {
       fieldname: "file",
       originalname: "water_contamination_report.pdf",
@@ -104,7 +108,7 @@ describe("Gemini Multimodal Input Intake & Normalization", () => {
     };
 
     const validation = validateComplaintInput(
-      { consent: true, lat: 18.5590, lng: 73.7868 },
+      { consent: true, lat: 18.559, lng: 73.7868 },
       mockPdfFile
     );
     assert.equal(validation.valid, true);
@@ -113,7 +117,7 @@ describe("Gemini Multimodal Input Intake & Normalization", () => {
     const report = await analyzeWithGemini({
       text: "",
       file: mockPdfFile,
-      userLat: 18.5590,
+      userLat: 18.559,
       userLng: 73.7868
     });
 
@@ -124,7 +128,10 @@ describe("Gemini Multimodal Input Intake & Normalization", () => {
 
   it("should validate and structure Voice Note audio evidence input", async () => {
     // Valid WebM EBML header
-    const audioBuffer = Buffer.from([0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81, 0x01, 0x42, 0xF7, 0x81, 0x01]);
+    const audioBuffer = Buffer.from([
+      0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81,
+      0x01
+    ]);
     const mockAudioFile = {
       fieldname: "audio",
       originalname: "voice-recording.webm",
@@ -154,15 +161,15 @@ describe("Gemini Multimodal Input Intake & Normalization", () => {
 
   it("should validate and structure Photo image evidence input (with EXIF stripping)", async () => {
     // Valid JPEG with APP1 EXIF segment
-    const soi = Buffer.from([0xFF, 0xD8]);
+    const soi = Buffer.from([0xff, 0xd8]);
     const app1Data = Buffer.from("Exif\0\0SecretCameraGpsData");
     const app1Len = Buffer.alloc(2);
     app1Len.writeUInt16BE(app1Data.length + 2, 0);
-    const app1 = Buffer.concat([Buffer.from([0xFF, 0xE1]), app1Len, app1Data]);
+    const app1 = Buffer.concat([Buffer.from([0xff, 0xe1]), app1Len, app1Data]);
 
-    const sos = Buffer.from([0xFF, 0xDA, 0x00, 0x02, 0x00, 0x00]);
+    const sos = Buffer.from([0xff, 0xda, 0x00, 0x02, 0x00, 0x00]);
     const pixels = Buffer.from("simulated_jpeg_pothole_pixels");
-    const eoi = Buffer.from([0xFF, 0xD9]);
+    const eoi = Buffer.from([0xff, 0xd9]);
     const rawJpeg = Buffer.concat([soi, app1, sos, pixels, eoi]);
 
     const mockPhotoFile = {
@@ -180,7 +187,10 @@ describe("Gemini Multimodal Input Intake & Normalization", () => {
     assert.equal(validation.valid, true);
     assert.equal(mockPhotoFile.canonicalMime, "image/jpeg");
     // Verify EXIF was stripped from buffer
-    assert.equal(mockPhotoFile.buffer.includes(Buffer.from("SecretCameraGpsData")), false);
+    assert.equal(
+      mockPhotoFile.buffer.includes(Buffer.from("SecretCameraGpsData")),
+      false
+    );
     // Verify image data remains intact
     assert.equal(mockPhotoFile.buffer.includes(pixels), true);
 
@@ -195,8 +205,13 @@ describe("Gemini Multimodal Input Intake & Normalization", () => {
   });
 
   it("should handle simultaneous Photo AND Voice Note without dropping either evidence source", async () => {
-    const imgBuffer = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xD9]);
-    const audioBuffer = Buffer.from([0x1A, 0x45, 0xDF, 0xA3, 0x01, 0x02, 0x03, 0x04]);
+    const imgBuffer = Buffer.from([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+      0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9
+    ]);
+    const audioBuffer = Buffer.from([
+      0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x02, 0x03, 0x04
+    ]);
 
     const photo = {
       fieldname: "file",
@@ -221,7 +236,7 @@ describe("Gemini Multimodal Input Intake & Normalization", () => {
       text: "मोठा कचरा साचला आहे दुर्गंधी पसरली आहे garbage and trash dump",
       file: photo,
       audioFile: audio,
-      userLat: 18.5020,
+      userLat: 18.502,
       userLng: 73.9272
     });
 
@@ -234,7 +249,9 @@ describe("Gemini Error Classification & Key Scrubbing", () => {
   const secretKey = "test-key-123";
 
   it("classifyGeminiError should classify Quota Exceeded (429) and NEVER leak the key", () => {
-    const rawError = new Error(`[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${secretKey}: [429 Too Many Requests] Resource has been exhausted (check quota).`);
+    const rawError = new Error(
+      `[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${secretKey}: [429 Too Many Requests] Resource has been exhausted (check quota).`
+    );
     rawError.status = 429;
 
     const classified = classifyGeminiError(rawError, secretKey);
@@ -251,14 +268,19 @@ describe("Gemini Error Classification & Key Scrubbing", () => {
   });
 
   it("classifyGeminiError should classify Invalid API Key (400/401/403) and NEVER leak the key", () => {
-    const rawError = new Error(`Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${secretKey}: [400 Bad Request] API key not valid. Please pass a valid API key.`);
+    const rawError = new Error(
+      `Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${secretKey}: [400 Bad Request] API key not valid. Please pass a valid API key.`
+    );
     rawError.status = 400;
 
     const classified = classifyGeminiError(rawError, secretKey);
 
     assert.equal(classified.status, 401);
     assert.equal(classified.code, "INVALID_API_KEY");
-    assert.equal(classified.userMessage.includes("Invalid Gemini API key"), true);
+    assert.equal(
+      classified.userMessage.includes("Invalid Gemini API key"),
+      true
+    );
 
     // Verify key scrubbing
     assert.equal(classified.logMessage.includes(secretKey), false);
@@ -267,19 +289,26 @@ describe("Gemini Error Classification & Key Scrubbing", () => {
   });
 
   it("classifyGeminiError should classify Unsupported File Format (400) and NEVER leak the key", () => {
-    const rawError = new Error(`[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${secretKey}: [400 Bad Request] Unsupported MIME type: audio/webm;codecs=opus`);
+    const rawError = new Error(
+      `[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${secretKey}: [400 Bad Request] Unsupported MIME type: audio/webm;codecs=opus`
+    );
     rawError.status = 400;
 
     const classified = classifyGeminiError(rawError, secretKey);
 
     assert.equal(classified.status, 400);
     assert.equal(classified.code, "UNSUPPORTED_FILE");
-    assert.equal(classified.userMessage.includes("uploaded file format is not supported"), true);
+    assert.equal(
+      classified.userMessage.includes("uploaded file format is not supported"),
+      true
+    );
     assert.equal(classified.logMessage.includes(secretKey), false);
   });
 
   it("classifyGeminiError should classify Timeout / Abort errors and NEVER leak the key", () => {
-    const rawError = new Error(`The user aborted a request or connection timed out after 25000ms. URL: https://generativelanguage.googleapis.com/v1beta/models?key=${secretKey}`);
+    const rawError = new Error(
+      `The user aborted a request or connection timed out after 25000ms. URL: https://generativelanguage.googleapis.com/v1beta/models?key=${secretKey}`
+    );
     rawError.name = "AbortError";
     rawError.status = 504;
 
@@ -303,7 +332,7 @@ describe("POST /api/complaints/analyze End-to-End Route Integration", () => {
       body: {
         text: "Dangerous open manhole on Baner High Street opposite Balewadi Phata.",
         consent: "true",
-        lat: 18.5590,
+        lat: 18.559,
         lng: 73.7868
       },
       files: {}
@@ -319,6 +348,21 @@ describe("POST /api/complaints/analyze End-to-End Route Integration", () => {
     assert.equal(Boolean(result.body.data.structuredReport), true);
     assert.equal(Boolean(result.body.data.verification), true);
     assert.equal(Boolean(result.body.data.actionPlan), true);
+    assert.equal(result.body.data.structuredReport.severity, 5);
+    assert.equal(result.body.data.structuredReport.subcategory, "Open Manhole");
+    assert.equal(result.body.data.actionPlan.authority.id, "pmc_drainage");
+    assert.equal(
+      result.body.data.hazardTriage.emergencyContacts[0].number,
+      "112"
+    );
+    assert.match(
+      result.body.data.hazardTriage.safetyAdvice.join(" "),
+      /stay well away/i
+    );
+    assert.match(
+      result.body.data.hazardTriage.safetyAdvice.join(" "),
+      /warn nearby people/i
+    );
   });
 
   it("should return 400 when citizen consent is missing", async () => {
@@ -340,7 +384,10 @@ describe("POST /api/complaints/analyze End-to-End Route Integration", () => {
     const result = await promise;
     assert.equal(result.statusCode, 400);
     assert.equal(result.body.success, false);
-    assert.equal(result.body.errors.some((e) => e.includes("consent")), true);
+    assert.equal(
+      result.body.errors.some((e) => e.includes("consent")),
+      true
+    );
   });
 
   it("should return specific user-friendly error when GeminiServiceError is thrown", async () => {

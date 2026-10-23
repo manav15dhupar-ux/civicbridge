@@ -4,18 +4,45 @@
  * letter drafting, and mock PMC Care dispatch.
  */
 
-import { analyzeComplaint, draftLetter, submitMockGrievance, fileComplaint, fetchReports, checkHealth, fetchReverseGeocode } from "./api.js";
-import { initMap, setUserLocation, renderReportsOnMap, focusCoordinate, confirmPin } from "./map.js";
-import { startRecording, stopRecording, isAudioRecordingSupported, clearRecording } from "./audio.js";
+import {
+  analyzeComplaint,
+  draftLetter,
+  submitMockGrievance,
+  fileComplaint,
+  fetchReports,
+  checkHealth,
+  fetchReverseGeocode
+} from "./api.js";
+import {
+  initMap,
+  setUserLocation,
+  renderReportsOnMap,
+  focusCoordinate,
+  confirmPin
+} from "./map.js";
+import {
+  startRecording,
+  stopRecording,
+  isAudioRecordingSupported,
+  clearRecording
+} from "./audio.js";
 import { extractExifGpsFromBlob } from "./exif.js";
 import {
   showToast,
+  renderImmediateSafetyCard,
   renderStructuredCard,
   renderVerificationCard,
   renderPrivacyShieldCard,
   renderActionPlanCard,
   renderFileComplaintPanel
 } from "./ui.js";
+import {
+  BYTES_PER_KILOBYTE,
+  BYTES_PER_MEGABYTE,
+  GPS_ACCURACY_WARNING_METERS,
+  LOCATION_REQUEST_TIMEOUT_MS,
+  MAX_UPLOAD_SIZE_BYTES
+} from "./constants.js";
 
 /**
  * Application Runtime State.
@@ -43,7 +70,12 @@ const state = {
  * @param {number|null} [accuracy=null] - Accuracy in meters.
  * @param {boolean} [isConfirmed=false] - Whether citizen manually dragged/confirmed pin.
  */
-export async function updateLocationDisplay(lat, lng, accuracy = null, isConfirmed = false) {
+export async function updateLocationDisplay(
+  lat,
+  lng,
+  accuracy = null,
+  isConfirmed = false
+) {
   const coordsDisplay = document.getElementById("coordsDisplay");
   const locInput = document.getElementById("locationManualInput");
   const spinner = document.getElementById("geocodingSpinner");
@@ -60,35 +92,41 @@ export async function updateLocationDisplay(lat, lng, accuracy = null, isConfirm
 
   // Handle Accuracy Warning (> 50m)
   if (typeof accuracy === "number" && accuracy > 0) {
-    if (accuracy > 50) {
+    if (accuracy > GPS_ACCURACY_WARNING_METERS) {
       accuracyWarning?.classList.remove("hidden");
-      if (accuracyValueText) accuracyValueText.textContent = Math.round(accuracy);
+      if (accuracyValueText)
+        accuracyValueText.textContent = Math.round(accuracy);
       if (accuracyPill) {
         accuracyPill.textContent = `GPS (±${Math.round(accuracy)}m) ⚠️`;
-        accuracyPill.className = "text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold border border-amber-200";
+        accuracyPill.className =
+          "text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold border border-amber-200";
       }
     } else {
       accuracyWarning?.classList.add("hidden");
       if (accuracyPill) {
         accuracyPill.textContent = `GPS (±${Math.round(accuracy)}m) ✓`;
-        accuracyPill.className = "text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold border border-emerald-200";
+        accuracyPill.className =
+          "text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold border border-emerald-200";
       }
     }
   } else if (isConfirmed) {
     accuracyWarning?.classList.add("hidden");
     if (accuracyPill) {
       accuracyPill.textContent = "Pin Confirmed ✓";
-      accuracyPill.className = "text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold border border-emerald-200";
+      accuracyPill.className =
+        "text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold border border-emerald-200";
     }
     if (btnConfirmLocation) {
-      btnConfirmLocation.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-700 text-white font-bold text-[11px] shadow-sm";
+      btnConfirmLocation.className =
+        "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-700 text-white font-bold text-[11px] shadow-sm";
     }
     if (btnConfirmText) btnConfirmText.textContent = "Pin Confirmed ✓";
   } else {
     accuracyWarning?.classList.add("hidden");
     if (accuracyPill) {
       accuracyPill.textContent = "Draggable Pin";
-      accuracyPill.className = "text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-medium";
+      accuracyPill.className =
+        "text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-medium";
     }
   }
 
@@ -106,20 +144,29 @@ export async function updateLocationDisplay(lat, lng, accuracy = null, isConfirm
       if (geocode.isWithinPune) {
         const badgeLabel = isConfirmed
           ? "High Precision (Pin Confirmed)"
-          : (typeof accuracy === "number" && accuracy <= 50)
-          ? "High Precision (GPS Verified)"
-          : "Inside PMC Boundary";
+          : typeof accuracy === "number" &&
+              accuracy <= GPS_ACCURACY_WARNING_METERS
+            ? "High Precision (GPS Verified)"
+            : "Inside PMC Boundary";
 
-        confidenceBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200";
+        confidenceBadge.className =
+          "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200";
         confidenceBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span><span>${badgeLabel}</span>`;
       } else {
-        confidenceBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300";
+        confidenceBadge.className =
+          "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300";
         confidenceBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span><span>Outside Pune Boundary</span>`;
-        showToast("Selected pin is outside Pune Municipal boundaries. Please keep reports inside Pune.", "warning");
+        showToast(
+          "Selected pin is outside Pune Municipal boundaries. Please keep reports inside Pune.",
+          "warning"
+        );
       }
     }
-  } catch (err) {
-    console.debug("Reverse geocode update error:", err);
+  } catch {
+    showToast(
+      "Could not resolve this address. Please confirm the location on the map.",
+      "warning"
+    );
   } finally {
     spinner?.classList.add("hidden");
   }
@@ -170,13 +217,15 @@ async function checkSystemStatus() {
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           <span class="text-xs font-semibold text-emerald-800">Gemini Live</span>
         `;
-        statusPill.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200";
+        statusPill.className =
+          "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200";
       } else {
         statusPill.innerHTML = `
           <span class="w-2 h-2 rounded-full bg-blue-500"></span>
           <span class="text-xs font-semibold text-blue-800">Smart Demo Mode</span>
         `;
-        statusPill.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200";
+        statusPill.className =
+          "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200";
       }
     }
   } catch (err) {
@@ -226,7 +275,6 @@ function setupFormListeners() {
       }
 
       btnGetLocation.classList.add("animate-pulse");
-      const icon = document.getElementById("locateIcon");
       const text = document.getElementById("locateText");
       if (text) text.textContent = "Acquiring...";
 
@@ -246,21 +294,30 @@ function setupFormListeners() {
           setUserLocation(roundedLat, roundedLng, true, accuracy, false);
           updateLocationDisplay(roundedLat, roundedLng, accuracy, false);
 
-          if (accuracy > 50) {
-            showToast(`GPS acquired with ±${Math.round(accuracy)}m accuracy (worse than 50m). Drag the pin to pinpoint the exact defect.`, "warning");
+          if (accuracy > GPS_ACCURACY_WARNING_METERS) {
+            showToast(
+              `GPS acquired with ±${Math.round(accuracy)}m accuracy (worse than 50m). Drag the pin to pinpoint the exact defect.`,
+              "warning"
+            );
           } else {
-            showToast(`High-accuracy GPS location acquired (±${Math.round(accuracy)}m)!`, "success");
+            showToast(
+              `High-accuracy GPS location acquired (±${Math.round(accuracy)}m)!`,
+              "success"
+            );
           }
         },
         (err) => {
           btnGetLocation.classList.remove("animate-pulse");
           if (text) text.textContent = "High-Accuracy GPS";
           console.warn("Geolocation denied or timed out:", err.message);
-          showToast("Location request timed out or permission denied. Drag the blue pin on the map to place your report.", "info");
+          showToast(
+            "Location request timed out or permission denied. Drag the blue pin on the map to place your report.",
+            "info"
+          );
         },
         {
           enableHighAccuracy: true,
-          timeout: 12000,
+          timeout: LOCATION_REQUEST_TIMEOUT_MS,
           maximumAge: 0
         }
       );
@@ -273,8 +330,16 @@ function setupFormListeners() {
     btnConfirmLocation.addEventListener("click", () => {
       state.isPinConfirmed = true;
       confirmPin();
-      updateLocationDisplay(state.userCoordinates.lat, state.userCoordinates.lng, null, true);
-      showToast(`Location confirmed at ${state.userCoordinates.lat.toFixed(5)}° N, ${state.userCoordinates.lng.toFixed(5)}° E!`, "success");
+      updateLocationDisplay(
+        state.userCoordinates.lat,
+        state.userCoordinates.lng,
+        null,
+        true
+      );
+      showToast(
+        `Location confirmed at ${state.userCoordinates.lat.toFixed(5)}° N, ${state.userCoordinates.lng.toFixed(5)}° E!`,
+        "success"
+      );
     });
   }
 
@@ -284,7 +349,10 @@ function setupFormListeners() {
       e.preventDefault();
 
       if (!consentCheckbox.checked) {
-        showToast("Please check the privacy consent before submitting.", "warning");
+        showToast(
+          "Please check the privacy consent before submitting.",
+          "warning"
+        );
         consentCheckbox.focus();
         return;
       }
@@ -292,7 +360,10 @@ function setupFormListeners() {
       const text = document.getElementById("complaintText").value.trim();
 
       if (!text && !state.selectedFile && !state.recordedAudioBlob) {
-        showToast("Please provide a text description, voice note, or media evidence.", "warning");
+        showToast(
+          "Please provide a text description, voice note, or media evidence.",
+          "warning"
+        );
         return;
       }
 
@@ -307,12 +378,18 @@ function setupFormListeners() {
         formData.append("file", state.selectedFile);
       }
       if (state.recordedAudioBlob) {
-        formData.append("audio", state.recordedAudioBlob, "voice-recording.webm");
+        formData.append(
+          "audio",
+          state.recordedAudioBlob,
+          "voice-recording.webm"
+        );
       }
 
       // Mobile sticky analyze button sync
       const btnMobileSticky = document.getElementById("btnMobileStickyAnalyze");
-      const btnMobileStickyText = document.getElementById("btnMobileStickyText");
+      const btnMobileStickyText = document.getElementById(
+        "btnMobileStickyText"
+      );
 
       // UI Loading state
       btnAnalyze.disabled = true;
@@ -322,7 +399,8 @@ function setupFormListeners() {
       `;
       if (btnMobileSticky) {
         btnMobileSticky.disabled = true;
-        if (btnMobileStickyText) btnMobileStickyText.textContent = "Structuring with Gemini...";
+        if (btnMobileStickyText)
+          btnMobileStickyText.textContent = "Structuring with Gemini...";
       }
 
       // Show Mobbin Loading Skeleton & Stepper Progress
@@ -348,19 +426,29 @@ function setupFormListeners() {
           // Stage state highlights
           if (progress >= 30) {
             const stepPrivacy = document.getElementById("stepPrivacy");
-            if (stepPrivacy) stepPrivacy.className = "flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-950";
+            if (stepPrivacy)
+              stepPrivacy.className =
+                "flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-950";
           }
           if (progress >= 60) {
             const stepGemini = document.getElementById("stepGemini");
-            if (stepGemini) stepGemini.className = "flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-950";
+            if (stepGemini)
+              stepGemini.className =
+                "flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-950";
             const stepSpatial = document.getElementById("stepSpatial");
-            if (stepSpatial) stepSpatial.className = "flex items-center gap-2 p-2.5 rounded-xl bg-blue-50 border border-blue-200 font-bold text-blue-900";
+            if (stepSpatial)
+              stepSpatial.className =
+                "flex items-center gap-2 p-2.5 rounded-xl bg-blue-50 border border-blue-200 font-bold text-blue-900";
           }
           if (progress >= 85) {
             const stepSpatial = document.getElementById("stepSpatial");
-            if (stepSpatial) stepSpatial.className = "flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-950";
+            if (stepSpatial)
+              stepSpatial.className =
+                "flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 font-bold text-emerald-950";
             const stepAction = document.getElementById("stepAction");
-            if (stepAction) stepAction.className = "flex items-center gap-2 p-2.5 rounded-xl bg-blue-50 border border-blue-200 font-bold text-blue-900";
+            if (stepAction)
+              stepAction.className =
+                "flex items-center gap-2 p-2.5 rounded-xl bg-blue-50 border border-blue-200 font-bold text-blue-900";
           }
         }
       }, 350);
@@ -393,11 +481,18 @@ function setupFormListeners() {
           // Hide mobile sticky bar after results are shown (results fill the screen)
           const stickyBar = document.getElementById("mobileStickyBar");
           if (stickyBar) {
-            stickyBar.classList.add("translate-y-full", "opacity-0", "pointer-events-none");
+            stickyBar.classList.add(
+              "translate-y-full",
+              "opacity-0",
+              "pointer-events-none"
+            );
           }
 
           // Smooth scroll to structured results
-          resultsContainer?.scrollIntoView({ behavior: "smooth", block: "start" });
+          resultsContainer?.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+          });
         }
       } catch (err) {
         clearInterval(progressInterval);
@@ -411,7 +506,8 @@ function setupFormListeners() {
         `;
         if (btnMobileSticky) {
           btnMobileSticky.disabled = false;
-          if (btnMobileStickyText) btnMobileStickyText.textContent = "Analyze with Gemini";
+          if (btnMobileStickyText)
+            btnMobileStickyText.textContent = "Analyze with Gemini";
         }
       }
     });
@@ -442,10 +538,18 @@ function renderAnalysisResults(data) {
   const privacySlot = document.getElementById("privacyShieldSlot");
   const actionPlanSlot = document.getElementById("actionPlanSlot");
 
-  if (structuredSlot) structuredSlot.innerHTML = renderStructuredCard(data.structuredReport);
-  if (verificationSlot) verificationSlot.innerHTML = renderVerificationCard(data.verification);
-  if (privacySlot) privacySlot.innerHTML = renderPrivacyShieldCard(data.privacyShield);
-  if (actionPlanSlot) actionPlanSlot.innerHTML = renderActionPlanCard(data.actionPlan);
+  if (structuredSlot) {
+    structuredSlot.innerHTML = [
+      renderImmediateSafetyCard(data.hazardTriage),
+      renderStructuredCard(data.structuredReport)
+    ].join("");
+  }
+  if (verificationSlot)
+    verificationSlot.innerHTML = renderVerificationCard(data.verification);
+  if (privacySlot)
+    privacySlot.innerHTML = renderPrivacyShieldCard(data.privacyShield);
+  if (actionPlanSlot)
+    actionPlanSlot.innerHTML = renderActionPlanCard(data.actionPlan);
 
   // Render Step 5: File This Complaint Panel (after the action plan)
   const fileSlot = document.getElementById("fileComplaintSlot");
@@ -467,12 +571,16 @@ function renderAnalysisResults(data) {
   // Hook up dynamically rendered Action buttons
   const btnLetter = document.getElementById("btnOpenLetterModal");
   if (btnLetter) {
-    btnLetter.addEventListener("click", () => openLetterModal(data.structuredReport));
+    btnLetter.addEventListener("click", () =>
+      openLetterModal(data.structuredReport)
+    );
   }
 
   const btnMockSubmit = document.getElementById("btnSubmitMock");
   if (btnMockSubmit) {
-    btnMockSubmit.addEventListener("click", () => handleMockSubmission(data.structuredReport, data.actionPlan));
+    btnMockSubmit.addEventListener("click", () =>
+      handleMockSubmission(data.structuredReport, data.actionPlan)
+    );
   }
 }
 
@@ -485,20 +593,29 @@ function attachFilingPanelListeners(data) {
   const btnCopyToken = document.getElementById("btnCopyTrackingToken");
   if (btnCopyToken) {
     btnCopyToken.addEventListener("click", () => {
-      const token = btnCopyToken.dataset.token || document.getElementById("filingTrackingToken")?.textContent || "";
+      const token =
+        btnCopyToken.dataset.token ||
+        document.getElementById("filingTrackingToken")?.textContent ||
+        "";
       if (token) {
-        navigator.clipboard.writeText(token).then(() => {
-          const label = document.getElementById("copyTokenLabel");
-          if (label) label.textContent = "Copied! ✓";
-          btnCopyToken.classList.replace("bg-blue-600", "bg-emerald-600");
-          showToast(`Tracking token ${token} copied to clipboard!`, "success");
-          setTimeout(() => {
-            if (label) label.textContent = "Copy";
-            btnCopyToken.classList.replace("bg-emerald-600", "bg-blue-600");
-          }, 2500);
-        }).catch(() => {
-          showToast("Failed to copy tracking token", "error");
-        });
+        navigator.clipboard
+          .writeText(token)
+          .then(() => {
+            const label = document.getElementById("copyTokenLabel");
+            if (label) label.textContent = "Copied! ✓";
+            btnCopyToken.classList.replace("bg-blue-600", "bg-emerald-600");
+            showToast(
+              `Tracking token ${token} copied to clipboard!`,
+              "success"
+            );
+            setTimeout(() => {
+              if (label) label.textContent = "Copy";
+              btnCopyToken.classList.replace("bg-emerald-600", "bg-blue-600");
+            }, 2500);
+          })
+          .catch(() => {
+            showToast("Failed to copy tracking token", "error");
+          });
       }
     });
   }
@@ -515,12 +632,20 @@ function attachFilingPanelListeners(data) {
           const iconSpan = document.getElementById("copyGrievanceIcon");
           if (textSpan) textSpan.textContent = "Copied to Clipboard! ✓";
           if (iconSpan) iconSpan.textContent = "✓";
-          btnCopy.classList.add("bg-emerald-100", "text-emerald-900", "border-emerald-300");
+          btnCopy.classList.add(
+            "bg-emerald-100",
+            "text-emerald-900",
+            "border-emerald-300"
+          );
           showToast("Grievance text copied to clipboard!", "success");
           setTimeout(() => {
             if (textSpan) textSpan.textContent = "Copy Text";
             if (iconSpan) iconSpan.textContent = "📋";
-            btnCopy.classList.remove("bg-emerald-100", "text-emerald-900", "border-emerald-300");
+            btnCopy.classList.remove(
+              "bg-emerald-100",
+              "text-emerald-900",
+              "border-emerald-300"
+            );
           }, 2500);
         },
         () => showToast("Failed to copy text", "error")
@@ -537,7 +662,10 @@ function attachFilingPanelListeners(data) {
       try {
         const res = await fileComplaint(data.structuredReport, data.actionPlan);
         if (res.success && res.data) {
-          showToast(`Filed Successfully! Tracking Token: ${res.data.trackingId}`, "success");
+          showToast(
+            `Filed Successfully! Tracking Token: ${res.data.trackingId}`,
+            "success"
+          );
 
           // Re-render filing panel in confirmed active state
           const fileSlot = document.getElementById("fileComplaintSlot");
@@ -598,7 +726,8 @@ function setupVoiceRecording() {
         onStart: () => {
           state.isRecording = true;
           btnRecord.classList.add("recording-active");
-          btnRecord.querySelector(".record-text").textContent = "Stop Recording";
+          btnRecord.querySelector(".record-text").textContent =
+            "Stop Recording";
           recordingStatus?.classList.remove("hidden");
           visualizer?.classList.remove("hidden");
           audioPreview?.classList.add("hidden");
@@ -663,6 +792,12 @@ function setupFileUploader() {
   if (!dropZone || !fileInput) return;
 
   dropZone.addEventListener("click", () => fileInput.click());
+  dropZone.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      fileInput.click();
+    }
+  });
 
   dropZone.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -688,16 +823,19 @@ function setupFileUploader() {
   });
 
   async function handleFileSelected(file) {
-    const maxBytes = 20 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      showToast(`File exceeds 20MB limit (${(file.size / (1024 * 1024)).toFixed(1)} MB)`, "error");
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      showToast(
+        `File exceeds ${MAX_UPLOAD_SIZE_BYTES / BYTES_PER_MEGABYTE}MB limit (${(file.size / BYTES_PER_MEGABYTE).toFixed(1)} MB)`,
+        "error"
+      );
       fileInput.value = "";
       return;
     }
 
     state.selectedFile = file;
     if (fileNameLabel) fileNameLabel.textContent = file.name;
-    if (fileSizeLabel) fileSizeLabel.textContent = `${(file.size / 1024).toFixed(1)} KB`;
+    if (fileSizeLabel)
+      fileSizeLabel.textContent = `${(file.size / BYTES_PER_KILOBYTE).toFixed(1)} KB`;
     filePreview?.classList.remove("hidden");
     dropZone.classList.add("hidden");
     showToast(`Attached ${file.name}`, "info");
@@ -709,9 +847,15 @@ function setupFileUploader() {
         const photoGpsBanner = document.getElementById("photoGpsBanner");
         const photoGpsCoords = document.getElementById("photoGpsCoords");
         const btnUsePhotoGps = document.getElementById("btnUsePhotoGps");
-        const btnDismissPhotoGps = document.getElementById("btnDismissPhotoGps");
+        const btnDismissPhotoGps =
+          document.getElementById("btnDismissPhotoGps");
 
-        if (exif && exif.hasGps && typeof exif.lat === "number" && typeof exif.lng === "number") {
+        if (
+          exif &&
+          exif.hasGps &&
+          typeof exif.lat === "number" &&
+          typeof exif.lng === "number"
+        ) {
           state.photoGpsCoordinates = { lat: exif.lat, lng: exif.lng };
           if (photoGpsCoords) {
             photoGpsCoords.textContent = `${exif.lat.toFixed(5)}° N, ${exif.lng.toFixed(5)}° E`;
@@ -737,8 +881,11 @@ function setupFileUploader() {
         } else {
           photoGpsBanner?.classList.add("hidden");
         }
-      } catch (err) {
-        console.debug("EXIF scan error:", err);
+      } catch {
+        showToast(
+          "Could not read photo location data. You can set the location manually.",
+          "info"
+        );
       }
     }
   }
@@ -816,7 +963,7 @@ async function updateLetterDraft(report, language) {
       if (subjectEl) subjectEl.value = res.data.subject;
       if (bodyEl) bodyEl.value = res.data.letterBody;
     }
-  } catch (err) {
+  } catch {
     showToast("Failed to draft letter in selected language.", "error");
   } finally {
     if (loadingIndicator) loadingIndicator.classList.add("hidden");
@@ -841,7 +988,14 @@ function setupLetterModal() {
 
   langTabs.forEach((tab) => {
     tab.addEventListener("click", async () => {
-      langTabs.forEach((t) => t.classList.remove("bg-white", "shadow-sm", "text-blue-600", "font-bold"));
+      langTabs.forEach((t) =>
+        t.classList.remove(
+          "bg-white",
+          "shadow-sm",
+          "text-blue-600",
+          "font-bold"
+        )
+      );
       tab.classList.add("bg-white", "shadow-sm", "text-blue-600", "font-bold");
 
       const lang = tab.dataset.lang;
@@ -881,7 +1035,10 @@ async function handleMockSubmission(report, actionPlan) {
     const res = await submitMockGrievance(report, actionPlan);
     if (res.success && res.data) {
       showSubmissionConfirmation(res.data);
-      showToast(`Grievance Dispatched! Token: ${res.data.trackingId}`, "success");
+      showToast(
+        `Grievance Dispatched! Token: ${res.data.trackingId}`,
+        "success"
+      );
 
       // Refresh map reports to show the newly added point
       await loadReports();
@@ -910,7 +1067,9 @@ function showSubmissionConfirmation(submissionData) {
 
   if (trackingSlot) trackingSlot.textContent = submissionData.trackingId;
   if (authoritySlot) authoritySlot.textContent = submissionData.authority;
-  if (targetDateSlot) targetDateSlot.textContent = submissionData.targetResolutionDate || "Within 48 hours";
+  if (targetDateSlot)
+    targetDateSlot.textContent =
+      submissionData.targetResolutionDate || "Within 48 hours";
 
   modal.classList.remove("hidden");
 
@@ -927,7 +1086,9 @@ function setupCategoryFilters() {
   const filterBtns = document.querySelectorAll(".category-filter-chip");
   filterBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
-      filterBtns.forEach((b) => b.classList.remove("bg-slate-900", "text-white"));
+      filterBtns.forEach((b) =>
+        b.classList.remove("bg-slate-900", "text-white")
+      );
       filterBtns.forEach((b) => b.classList.add("bg-white", "text-slate-700"));
 
       btn.classList.remove("bg-white", "text-slate-700");

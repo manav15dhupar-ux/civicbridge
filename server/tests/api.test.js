@@ -5,10 +5,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import { EventEmitter } from "node:events";
 import app from "../index.js";
 import complaintRoutes from "../routes/complaintRoutes.js";
-import authorityRoutes from "../routes/authorityRoutes.js";
 import { getAuthorities } from "../services/actionPlanService.js";
 import { getExistingReports } from "../services/verificationService.js";
 import { draftComplaintLetter } from "../services/geminiService.js";
@@ -61,30 +59,53 @@ describe("API Services & Data Integrations", () => {
         headers: { Origin: sameHostOrigin }
       });
       assert.equal(sameHostResponse.status, 200);
-      assert.equal(sameHostResponse.headers.get("access-control-allow-origin"), sameHostOrigin);
+      assert.equal(
+        sameHostResponse.headers.get("access-control-allow-origin"),
+        sameHostOrigin
+      );
 
-      const configuredOriginResponse = await fetch(`${baseUrl}/api/authorities`, {
-        headers: { Origin: "http://localhost:3000" }
-      });
+      const configuredOriginResponse = await fetch(
+        `${baseUrl}/api/authorities`,
+        {
+          headers: { Origin: "http://localhost:3000" }
+        }
+      );
       assert.equal(configuredOriginResponse.status, 200);
-      assert.equal(configuredOriginResponse.headers.get("access-control-allow-origin"), "http://localhost:3000");
+      assert.equal(
+        configuredOriginResponse.headers.get("access-control-allow-origin"),
+        "http://localhost:3000"
+      );
 
       const blockedResponse = await fetch(`${baseUrl}/api/authorities`, {
         headers: { Origin: "https://untrusted.example" }
       });
       assert.equal(blockedResponse.status, 403);
-      assert.equal(blockedResponse.headers.get("content-type").includes("application/json"), true);
-      assert.equal((await blockedResponse.json()).code, "CORS_ORIGIN_FORBIDDEN");
+      assert.equal(
+        blockedResponse.headers
+          .get("content-type")
+          .includes("application/json"),
+        true
+      );
+      assert.equal(
+        (await blockedResponse.json()).code,
+        "CORS_ORIGIN_FORBIDDEN"
+      );
 
       const staticResponse = await fetch(`${baseUrl}/js/app.js`, {
         headers: { Origin: "https://untrusted.example" }
       });
       assert.equal(staticResponse.status, 200);
-      assert.equal(staticResponse.headers.get("access-control-allow-origin"), null);
+      assert.equal(
+        staticResponse.headers.get("access-control-allow-origin"),
+        null
+      );
 
       const noOriginResponse = await fetch(`${baseUrl}/api/authorities`);
       assert.equal(noOriginResponse.status, 200);
-      assert.equal(noOriginResponse.headers.get("access-control-allow-origin"), null);
+      assert.equal(
+        noOriginResponse.headers.get("access-control-allow-origin"),
+        null
+      );
 
       const headersResponse = await fetch(`${baseUrl}/`);
       const csp = headersResponse.headers.get("content-security-policy");
@@ -93,10 +114,13 @@ describe("API Services & Data Integrations", () => {
       assert.ok(csp.includes("https://unpkg.com"));
       assert.ok(csp.includes("https://*.tile.openstreetmap.org"));
       assert.equal(csp.includes("unsafe-eval"), false);
-      assert.equal(headersResponse.headers.get("permissions-policy"), "camera=(self), geolocation=(self), microphone=(self)");
+      assert.equal(
+        headersResponse.headers.get("permissions-policy"),
+        "camera=(self), geolocation=(self), microphone=(self)"
+      );
     } finally {
       await new Promise((resolve, reject) => {
-        server.close((error) => error ? reject(error) : resolve());
+        server.close((error) => (error ? reject(error) : resolve()));
       });
     }
   });
@@ -145,17 +169,29 @@ describe("API Services & Data Integrations", () => {
     };
 
     try {
-      const draftEn = await draftComplaintLetter({ report: sample, language: "en" });
+      const draftEn = await draftComplaintLetter({
+        report: sample,
+        language: "en"
+      });
       assert.equal(draftEn.language, "en");
-      assert.equal(draftEn.letterBody.includes("Pune Municipal Corporation"), true);
+      assert.equal(
+        draftEn.letterBody.includes("Pune Municipal Corporation"),
+        true
+      );
       assert.equal(Boolean(draftEn.subject), true);
 
-      const draftMr = await draftComplaintLetter({ report: sample, language: "mr" });
+      const draftMr = await draftComplaintLetter({
+        report: sample,
+        language: "mr"
+      });
       assert.equal(draftMr.language, "mr");
       assert.equal(draftMr.letterBody.includes("पुणे महानगरपालिका"), true);
       assert.equal(draftMr.letterBody.includes("तक्रारदार"), true);
 
-      const draftHi = await draftComplaintLetter({ report: sample, language: "hi" });
+      const draftHi = await draftComplaintLetter({
+        report: sample,
+        language: "hi"
+      });
       assert.equal(draftHi.language, "hi");
       assert.equal(draftHi.letterBody.includes("पुणे नगर निगम"), true);
     } finally {
@@ -200,7 +236,10 @@ describe("API Services & Data Integrations", () => {
       resolve();
     });
 
-    assert.equal(headersSet["referrer-policy"], "strict-origin-when-cross-origin");
+    assert.equal(
+      headersSet["referrer-policy"],
+      "strict-origin-when-cross-origin"
+    );
     const csp = headersSet["content-security-policy"] || "";
     assert.equal(csp.includes("tile.openstreetmap.org"), true);
   });
@@ -214,9 +253,10 @@ describe("API Services & Data Integrations", () => {
         category: "Roads & Footpaths",
         subcategory: "Potholes",
         severity: 4,
-        description: "Massive pothole on Baner High Street near Balewadi phata.",
+        description:
+          "Massive pothole on Baner High Street near Balewadi phata.",
         location_text: "Baner High Street, Pune",
-        lat: 18.5590,
+        lat: 18.559,
         lng: 73.7868,
         urgency_reason: "High accident risk for evening two-wheeler commuters.",
         evidence_summary: "Visual damage verified.",
@@ -264,7 +304,10 @@ describe("API Services & Data Integrations", () => {
       // 3. Online Route
       assert.equal(Boolean(data.onlineRoute.portalUrl), true);
       assert.equal(Boolean(data.onlineRoute.copyReadyText), true);
-      assert.equal(data.onlineRoute.copyReadyText.includes(data.trackingId), true);
+      assert.equal(
+        data.onlineRoute.copyReadyText.includes(data.trackingId),
+        true
+      );
 
       // 4. Offline Route (office name, documents, best time to visit, what to say)
       assert.equal(Boolean(data.offlineRoute.officeName), true);
@@ -290,15 +333,47 @@ describe("API Services & Data Integrations", () => {
     assert.equal(authorities.length >= 6, true);
 
     for (const auth of authorities) {
-      assert.equal(typeof auth.category, "string", `Missing category in ${auth.id}`);
-      assert.equal(typeof auth.authorityName, "string", `Missing authorityName in ${auth.id}`);
-      assert.equal(typeof auth.department, "string", `Missing department in ${auth.id}`);
-      assert.equal(typeof auth.portalUrl, "string", `Missing portalUrl in ${auth.id}`);
-      assert.equal(typeof auth.helpline, "string", `Missing helpline in ${auth.id}`);
+      assert.equal(
+        typeof auth.category,
+        "string",
+        `Missing category in ${auth.id}`
+      );
+      assert.equal(
+        typeof auth.authorityName,
+        "string",
+        `Missing authorityName in ${auth.id}`
+      );
+      assert.equal(
+        typeof auth.department,
+        "string",
+        `Missing department in ${auth.id}`
+      );
+      assert.equal(
+        typeof auth.portalUrl,
+        "string",
+        `Missing portalUrl in ${auth.id}`
+      );
+      assert.equal(
+        typeof auth.helpline,
+        "string",
+        `Missing helpline in ${auth.id}`
+      );
       assert.equal(typeof auth.email, "string", `Missing email in ${auth.id}`);
-      assert.equal(typeof auth.officeAddress, "string", `Missing officeAddress in ${auth.id}`);
-      assert.equal(Boolean(auth.offlineGuide.whatToSay), true, `Missing whatToSay in ${auth.id}`);
-      assert.equal(Boolean(auth.offlineGuide.bestTimeToVisit), true, `Missing bestTimeToVisit in ${auth.id}`);
+      assert.equal(
+        typeof auth.officeAddress,
+        "string",
+        `Missing officeAddress in ${auth.id}`
+      );
+      assert.equal(
+        Boolean(auth.offlineGuide.whatToSay),
+        true,
+        `Missing whatToSay in ${auth.id}`
+      );
+      assert.equal(
+        Boolean(auth.offlineGuide.bestTimeToVisit),
+        true,
+        `Missing bestTimeToVisit in ${auth.id}`
+      );
     }
   });
 });
