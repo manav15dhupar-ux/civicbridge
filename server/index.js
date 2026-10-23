@@ -103,6 +103,7 @@ const apiLimiter = rateLimit({
   max: 120,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false, xForwardedForHeader: false, default: false },
   message: {
     success: false,
     error: "Too many requests from this IP. Please try again after 15 minutes."
@@ -117,6 +118,7 @@ const analyzeLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false, xForwardedForHeader: false, default: false },
   message: {
     success: false,
     error: "Complaint analysis rate limit reached. Please wait 15 minutes before submitting again."
@@ -169,18 +171,28 @@ app.get("*", (req, res, next) => {
 app.use((err, req, res, next) => {
   const statusCode = err.status || err.statusCode || 500;
 
+  // Scrub any API keys from err.message before logging
+  const apiKey = process.env.GEMINI_API_KEY;
+  let cleanMessage = err.message || "An unexpected error occurred.";
+  if (apiKey && typeof apiKey === "string" && apiKey.trim().length > 0) {
+    cleanMessage = cleanMessage.replaceAll(apiKey, "[REDACTED_API_KEY]");
+  }
+  cleanMessage = cleanMessage.replace(/([?&]key=)[^&\s"`']+/gi, "$1[REDACTED_API_KEY]");
+  cleanMessage = cleanMessage.replace(/AIza[0-9A-Za-z-_]{35}/g, "[REDACTED_API_KEY]");
+
   // Log the full error server-side for debugging (never sent to client)
   console.error(`[ERROR] ${req.method} ${req.path} →`, {
-    message: err.message,
+    message: cleanMessage,
     code: err.code,
     status: statusCode
   });
 
-  // In non-development environments, return a generic message to prevent info leakage
-  const isDev = process.env.NODE_ENV === "development";
-  const clientMessage = isDev
-    ? (err.message || "An unexpected error occurred.")
-    : "An error occurred while processing your request.";
+  // If error has a userFacing flag, return its friendly message
+  const clientMessage = (err.isUserFacing && err.userMessage)
+    ? err.userMessage
+    : (process.env.NODE_ENV === "development"
+      ? cleanMessage
+      : "An error occurred while processing your request.");
 
   res.status(statusCode).json({
     success: false,

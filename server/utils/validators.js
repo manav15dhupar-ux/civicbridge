@@ -137,13 +137,35 @@ export function detectMimeTypeFromMagicBytes(buffer) {
 }
 
 /**
+ * Normalizes MIME types to canonical standards recognized by Google Gemini and browsers.
+ * Strips charset and codec parameters (e.g. ";codecs=opus").
+ * @param {string} mime - Raw MIME string from header or magic bytes.
+ * @param {boolean} [isAudio=false] - Whether the context indicates an audio track/upload.
+ * @returns {string} Clean canonical MIME type.
+ */
+export function normalizeMimeType(mime, isAudio = false) {
+  if (!mime || typeof mime !== "string") {
+    return isAudio ? "audio/webm" : "application/octet-stream";
+  }
+  let clean = mime.split(";")[0].trim().toLowerCase();
+  if (clean === "image/jpg" || clean === "image/pjpeg") return "image/jpeg";
+  if (clean === "audio/mpeg" || clean === "audio/mpga") return "audio/mp3";
+  if (clean === "audio/x-wav") return "audio/wav";
+  if (isAudio && (clean === "video/webm" || clean === "application/octet-stream")) {
+    return "audio/webm";
+  }
+  return clean;
+}
+
+/**
  * Strips EXIF metadata from JPEG or PNG buffer to protect citizen privacy.
+ * Preserves complete image stream and prevents truncation.
  * @param {Buffer} buffer - Raw file buffer.
  * @param {string} detectedMime - Detected MIME type.
  * @returns {Buffer} Sanitized buffer without EXIF segments.
  */
 export function stripExifMetadata(buffer, detectedMime) {
-  if (!buffer || !Buffer.isBuffer(buffer)) return buffer;
+  if (!buffer || !Buffer.isBuffer(buffer) || buffer.length < 4) return buffer;
 
   try {
     // 1. JPEG EXIF Stripping (APP1 marker 0xFFE1)
@@ -151,32 +173,58 @@ export function stripExifMetadata(buffer, detectedMime) {
       const chunks = [];
       chunks.push(buffer.subarray(0, 2)); // Keep SOI 0xFF, 0xD8
       let pos = 2;
+      let strippedAny = false;
 
       while (pos < buffer.length - 1) {
-        if (buffer[pos] !== 0xFF) break;
-        const marker = buffer[pos + 1];
+        // Skip fill bytes
+        while (pos < buffer.length && buffer[pos] === 0xFF) pos++;
+        if (pos >= buffer.length) break;
+
+        const marker = buffer[pos++];
 
         // Stop at Start of Scan (SOS 0xFFDA) or EOI (0xFFD9)
         if (marker === 0xDA || marker === 0xD9) {
+          chunks.push(Buffer.from([0xFF, marker]));
           chunks.push(buffer.subarray(pos));
-          break;
+          return Buffer.concat(chunks);
+        }
+
+        // Standalone markers without length: RST0-RST7 (0xD0-0xD7), SOI (0xD8), TEM (0x01)
+        if ((marker >= 0xD0 && marker <= 0xD7) || marker === 0x01) {
+          chunks.push(Buffer.from([0xFF, marker]));
+          continue;
         }
 
         // Variable length marker
-        const length = buffer.readUInt16BE(pos + 2);
-        const segmentEnd = pos + 2 + length;
+        if (pos + 2 > buffer.length) {
+          chunks.push(buffer.subarray(pos - 2));
+          break;
+        }
+
+        const length = buffer.readUInt16BE(pos);
+        if (length < 2 || pos + length > buffer.length) {
+          return buffer;
+        }
+
+        const segmentStart = pos - 2;
+        const segmentEnd = pos + length;
 
         // Skip APP1 EXIF segment (0xFFE1)
         if (marker === 0xE1) {
+          strippedAny = true;
           pos = segmentEnd;
           continue;
         }
 
-        chunks.push(buffer.subarray(pos, segmentEnd));
+        chunks.push(buffer.subarray(segmentStart, segmentEnd));
         pos = segmentEnd;
       }
 
-      return Buffer.concat(chunks);
+      if (pos < buffer.length) {
+        chunks.push(buffer.subarray(pos));
+      }
+
+      return strippedAny ? Buffer.concat(chunks) : buffer;
     }
 
     // 2. PNG Metadata Chunk Stripping (eXIf, tEXt, zTXt, iTXt)
@@ -185,13 +233,21 @@ export function stripExifMetadata(buffer, detectedMime) {
       strippedChunks.push(buffer.subarray(0, 8)); // Keep 8-byte PNG signature
       let offset = 8;
       const metadataChunkTypes = new Set(["eXIf", "tEXt", "zTXt", "iTXt"]);
+      let strippedAny = false;
 
-      while (offset < buffer.length - 8) {
+      while (offset <= buffer.length - 12) {
         const chunkLen = buffer.readUInt32BE(offset);
-        const chunkType = buffer.subarray(offset + 4, offset + 8).toString("ascii");
         const totalChunkSize = 4 + 4 + chunkLen + 4; // length + type + data + crc
+        if (offset + totalChunkSize > buffer.length) {
+          strippedChunks.push(buffer.subarray(offset));
+          break;
+        }
 
-        if (!metadataChunkTypes.has(chunkType)) {
+        const chunkType = buffer.subarray(offset + 4, offset + 8).toString("ascii");
+
+        if (metadataChunkTypes.has(chunkType)) {
+          strippedAny = true;
+        } else {
           strippedChunks.push(buffer.subarray(offset, offset + totalChunkSize));
         }
 
@@ -199,7 +255,11 @@ export function stripExifMetadata(buffer, detectedMime) {
         if (chunkType === "IEND") break;
       }
 
-      return Buffer.concat(strippedChunks);
+      if (offset < buffer.length) {
+        strippedChunks.push(buffer.subarray(offset));
+      }
+
+      return strippedAny ? Buffer.concat(strippedChunks) : buffer;
     }
   } catch (err) {
     // If parsing fails, return original buffer safely
@@ -211,11 +271,12 @@ export function stripExifMetadata(buffer, detectedMime) {
 
 /**
  * Validates uploaded file by size, allowed list, and magic bytes.
- * Strips EXIF metadata if valid image.
+ * Strips EXIF metadata if valid image and normalizes MIME type.
  * @param {Express.Multer.File|undefined} file - Multer file object.
- * @returns {{ valid: boolean, error?: string, sanitizedBuffer?: Buffer }} Validation result.
+ * @param {boolean} [isAudio=false] - Whether this file is an audio recording.
+ * @returns {{ valid: boolean, error?: string, sanitizedBuffer?: Buffer, detectedMime?: string, canonicalMime?: string }} Validation result.
  */
-export function validateUploadedFile(file) {
+export function validateUploadedFile(file, isAudio = false) {
   if (!file) {
     return { valid: true };
   }
@@ -239,8 +300,13 @@ export function validateUploadedFile(file) {
   // Strip EXIF metadata
   const sanitized = stripExifMetadata(file.buffer, realMime);
 
+  // Compute clean canonical MIME
+  const canonicalMime = normalizeMimeType(isAudio ? (file.mimetype || realMime) : realMime, isAudio);
+
   return {
     valid: true,
+    detectedMime: realMime,
+    canonicalMime,
     sanitizedBuffer: sanitized
   };
 }
@@ -346,20 +412,24 @@ export function validateComplaintInput(payload = {}, file, audioFile) {
   }
 
   if (file) {
-    const fileRes = validateUploadedFile(file);
+    const fileRes = validateUploadedFile(file, false);
     if (!fileRes.valid) {
       errors.push(fileRes.error);
-    } else if (fileRes.sanitizedBuffer) {
-      file.buffer = fileRes.sanitizedBuffer;
+    } else {
+      if (fileRes.sanitizedBuffer) file.buffer = fileRes.sanitizedBuffer;
+      file.detectedMime = fileRes.detectedMime;
+      file.canonicalMime = fileRes.canonicalMime;
     }
   }
 
   if (audioFile) {
-    const audioRes = validateUploadedFile(audioFile);
+    const audioRes = validateUploadedFile(audioFile, true);
     if (!audioRes.valid) {
       errors.push(audioRes.error);
-    } else if (audioRes.sanitizedBuffer) {
-      audioFile.buffer = audioRes.sanitizedBuffer;
+    } else {
+      if (audioRes.sanitizedBuffer) audioFile.buffer = audioRes.sanitizedBuffer;
+      audioFile.detectedMime = audioRes.detectedMime;
+      audioFile.canonicalMime = audioRes.canonicalMime;
     }
   }
 

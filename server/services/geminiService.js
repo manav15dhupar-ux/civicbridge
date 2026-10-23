@@ -1,12 +1,161 @@
 /**
  * @fileoverview Gemini AI Service for CivicBridge.
- * Ingests messy multilingual inputs (English, Hindi, Marathi, audio, images, PDFs)
- * and uses Google Gemini with a strict JSON schema to return structured, validated civic reports.
+ * Ingests multilingual citizen inputs (English, Hindi, Marathi, voice audio, photos, PDFs)
+ * and uses Google Gemini with strict JSON schema to return structured civic reports.
+ * Implements robust error classification, key redaction, and user-friendly error handling.
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PUNE_BOUNDS, isWithinPune } from "../utils/geo.js";
-import { StructuredReportSchema } from "../utils/validators.js";
+import { StructuredReportSchema, normalizeMimeType, detectMimeTypeFromMagicBytes } from "../utils/validators.js";
+
+/**
+ * Custom Operational Error for Gemini Service.
+ * Carries HTTP status, error code, and user-friendly message.
+ */
+export class GeminiServiceError extends Error {
+  /**
+   * @param {string} message - Technical error message (key-scrubbed).
+   * @param {number} [status=500] - HTTP status code.
+   * @param {string} [code="AI_ANALYSIS_FAILED"] - Machine-readable error code.
+   * @param {string} [userMessage] - User-facing friendly error text.
+   */
+  constructor(message, status = 500, code = "AI_ANALYSIS_FAILED", userMessage) {
+    super(message);
+    this.name = "GeminiServiceError";
+    this.status = status;
+    this.code = code;
+    this.userMessage = userMessage || message;
+    this.isUserFacing = true;
+  }
+}
+
+/**
+ * Sanitizes and classifies Gemini API errors, ensuring API keys are never leaked to logs or clients.
+ * Returns classified error metadata with user-friendly error messages.
+ * @param {Error|any} error - Thrown error object.
+ * @param {string} [apiKey] - API key to scrub from messages.
+ * @returns {{ status: number, code: string, userMessage: string, logMessage: string, cleanMessage: string }}
+ */
+export function classifyGeminiError(error, apiKey = process.env.GEMINI_API_KEY) {
+  let rawMsg = error?.message || String(error || "Unknown AI error");
+  let status = error?.status || error?.statusCode;
+
+  // 1. Scrub any occurrence of the actual API key
+  if (apiKey && typeof apiKey === "string" && apiKey.trim().length > 0) {
+    rawMsg = rawMsg.replaceAll(apiKey, "[REDACTED_API_KEY]");
+  }
+  // Scrub query params ?key=... or &key=...
+  rawMsg = rawMsg.replace(/([?&]key=)[^&\s"`']+/gi, "$1[REDACTED_API_KEY]");
+  // Scrub potential Google API keys (AIza...)
+  rawMsg = rawMsg.replace(/AIza[0-9A-Za-z-_]{35}/g, "[REDACTED_API_KEY]");
+
+  // 2. Extract HTTP status code if embedded in error message (e.g. [400 Bad Request])
+  if (!status) {
+    const statusMatch = rawMsg.match(/\[(\d{3})\s+[^\]]*\]/);
+    if (statusMatch) {
+      status = parseInt(statusMatch[1], 10);
+    }
+  }
+
+  const lowerMsg = rawMsg.toLowerCase();
+  const errorName = error?.name || "";
+
+  // 3. Classify error types
+
+  // A. QUOTA / RATE LIMIT EXCEEDED
+  if (
+    status === 429 ||
+    lowerMsg.includes("quota") ||
+    lowerMsg.includes("resource has been exhausted") ||
+    lowerMsg.includes("resource_exhausted") ||
+    lowerMsg.includes("rate limit") ||
+    lowerMsg.includes("too many requests")
+  ) {
+    return {
+      status: 429,
+      code: "QUOTA_EXCEEDED",
+      userMessage: "AI analysis quota or rate limit exceeded. Please wait a few moments before trying again or submit your report directly.",
+      logMessage: `Status 429 (QUOTA_EXCEEDED): ${rawMsg}`,
+      cleanMessage: rawMsg
+    };
+  }
+
+  // B. INVALID API KEY / AUTHENTICATION / PERMISSION
+  if (
+    (status === 400 && (lowerMsg.includes("api key") || lowerMsg.includes("api_key_invalid") || lowerMsg.includes("key not valid"))) ||
+    status === 401 ||
+    status === 403 ||
+    lowerMsg.includes("api key not valid") ||
+    lowerMsg.includes("permission_denied") ||
+    lowerMsg.includes("caller does not have permission")
+  ) {
+    return {
+      status: 401,
+      code: "INVALID_API_KEY",
+      userMessage: "Invalid Gemini API key configured. Please verify your GEMINI_API_KEY configuration.",
+      logMessage: `Status ${status || 401} (INVALID_API_KEY): ${rawMsg}`,
+      cleanMessage: rawMsg
+    };
+  }
+
+  // C. UNSUPPORTED FILE FORMAT / MIME TYPE
+  if (
+    (status === 400 && (lowerMsg.includes("unsupported") || lowerMsg.includes("mime") || lowerMsg.includes("invalid_argument") || lowerMsg.includes("audio format") || lowerMsg.includes("image format"))) ||
+    errorName === "GoogleGenerativeAIRequestInputError" ||
+    lowerMsg.includes("unsupported mime type") ||
+    lowerMsg.includes("unsupported file")
+  ) {
+    return {
+      status: 400,
+      code: "UNSUPPORTED_FILE",
+      userMessage: "The uploaded file format is not supported by the AI analyzer. Please provide an image (JPEG, PNG, WebP), PDF document, or audio recording (WebM, WAV, MP3).",
+      logMessage: `Status 400 (UNSUPPORTED_FILE): ${rawMsg}`,
+      cleanMessage: rawMsg
+    };
+  }
+
+  // D. TIMEOUT / ABORT
+  if (
+    status === 408 ||
+    status === 504 ||
+    errorName === "GoogleGenerativeAIAbortError" ||
+    errorName === "AbortError" ||
+    lowerMsg.includes("timeout") ||
+    lowerMsg.includes("timed out") ||
+    lowerMsg.includes("deadline_exceeded") ||
+    lowerMsg.includes("esockettimedout") ||
+    lowerMsg.includes("etimedout")
+  ) {
+    return {
+      status: 504,
+      code: "TIMEOUT",
+      userMessage: "Analysis request timed out while contacting the AI service. Please try again.",
+      logMessage: `Status 504 (TIMEOUT): ${rawMsg}`,
+      cleanMessage: rawMsg
+    };
+  }
+
+  // E. NETWORK CONNECTION FAILURE
+  if (lowerMsg.includes("fetch failed") || lowerMsg.includes("econnrefused") || lowerMsg.includes("enotfound")) {
+    return {
+      status: 503,
+      code: "SERVICE_UNAVAILABLE",
+      userMessage: "Unable to connect to the Gemini AI service. Please check your network connection or try again later.",
+      logMessage: `Status 503 (SERVICE_UNAVAILABLE): ${rawMsg}`,
+      cleanMessage: rawMsg
+    };
+  }
+
+  // F. GENERIC / UNHANDLED
+  return {
+    status: status || 500,
+    code: "AI_ANALYSIS_FAILED",
+    userMessage: "An error occurred while analyzing the complaint with Gemini AI. Please try again.",
+    logMessage: `Status ${status || 500} (AI_ANALYSIS_FAILED): ${rawMsg}`,
+    cleanMessage: rawMsg
+  };
+}
 
 /**
  * Strict JSON Schema definition for complaint structuring.
@@ -123,6 +272,7 @@ function getGeminiClient() {
  * @param {string} text - User complaint text.
  * @param {number|undefined} userLat - User GPS latitude.
  * @param {number|undefined} userLng - User GPS longitude.
+ * @param {string|undefined} locationText - Reverse-geocoded address.
  * @returns {{ locationText: string, lat: number, lng: number }}
  */
 function resolvePuneLocation(text = "", userLat, userLng, locationText) {
@@ -153,16 +303,18 @@ function resolvePuneLocation(text = "", userLat, userLng, locationText) {
 }
 
 /**
- * Fallback structuring engine used when GEMINI_API_KEY is not configured or in offline demo mode.
- * Evaluates keywords in Marathi, Hindi, and English.
+ * Smart Fallback structuring engine used when GEMINI_API_KEY is not configured or in offline demo mode.
+ * Evaluates keywords in Marathi, Hindi, English, and file metadata.
  * @param {string} text - Cleaned complaint text.
  * @param {number|undefined} userLat - GPS latitude.
  * @param {number|undefined} userLng - GPS longitude.
  * @param {object|undefined} fileInfo - Uploaded file metadata.
+ * @param {string|undefined} locationText - Reverse geocoded address.
  * @returns {object} Structured complaint matching COMPLAINT_JSON_SCHEMA.
  */
-function fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo, locationText) {
-  const lower = (text || "").toLowerCase();
+export function fallbackAnalyzeComplaint(text = "", userLat, userLng, fileInfo, locationText) {
+  const fileKeywords = (fileInfo?.filename || "").toLowerCase();
+  const lower = `${text || ""} ${fileKeywords}`.toLowerCase();
   const loc = resolvePuneLocation(text, userLat, userLng, locationText);
 
   let category = "Roads & Footpaths";
@@ -178,8 +330,8 @@ function fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo, locationText
     lower.includes("manhole") ||
     lower.includes("गटार") ||
     lower.includes("नाली") ||
-    lower.includes("overflow") ||
-    lower.includes("chamber")
+    lower.includes("chamber") ||
+    (lower.includes("overflow") && !lower.includes("garbage") && !lower.includes("waste") && !lower.includes("kachra") && !lower.includes("कचरा"))
   ) {
     category = "Drainage & Sewage";
     subcategory = lower.includes("manhole") ? "Open Manhole" : "Drain Overflow";
@@ -242,12 +394,21 @@ function fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo, locationText
     urgency = "Severe traffic congestion, gridlock at junction, and elevated collision potential.";
   }
 
-  const cleanDescription = text && text.trim().length > 10
-    ? text.trim().charAt(0).toUpperCase() + text.trim().slice(1)
-    : `Civic issue regarding ${subcategory} reported near ${loc.locationText}.`;
+  let cleanDescription = "";
+  if (text && text.trim().length > 10) {
+    cleanDescription = text.trim().charAt(0).toUpperCase() + text.trim().slice(1);
+  } else if (fileInfo?.mimetype?.includes("audio")) {
+    cleanDescription = `Citizen voice recording received regarding urgent ${subcategory.toLowerCase()} near ${loc.locationText}.`;
+  } else if (fileInfo?.mimetype === "application/pdf") {
+    cleanDescription = `Citizen submitted civic documentation report regarding ${subcategory.toLowerCase()} near ${loc.locationText}.`;
+  } else if (fileInfo?.mimetype?.startsWith("image/")) {
+    cleanDescription = `Citizen photographic evidence submitted documenting ${subcategory.toLowerCase()} near ${loc.locationText}.`;
+  } else {
+    cleanDescription = `Civic issue regarding ${subcategory} reported near ${loc.locationText}.`;
+  }
 
   const evidence = fileInfo
-    ? `Citizen submitted ${fileInfo.mimetype} file (${(fileInfo.size / 1024).toFixed(1)} KB) corroborating ${subcategory.toLowerCase()}.`
+    ? `Citizen submitted ${fileInfo.mimetype || "media"} file (${((fileInfo.size || 1024) / 1024).toFixed(1)} KB) corroborating ${subcategory.toLowerCase()}.`
     : `Verified citizen grievance description for ${subcategory.toLowerCase()}.`;
 
   return {
@@ -267,21 +428,25 @@ function fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo, locationText
 
 /**
  * Analyzes and structures a citizen complaint using Google Gemini or robust local intelligence.
+ * Attaches both files (PDF, image) and voice notes (audio) without dropping evidence.
  * @param {object} params - Input parameters.
  * @param {string} params.text - Redacted citizen text (English/Hindi/Marathi).
  * @param {Express.Multer.File} [params.file] - Attached photo, video, or PDF.
  * @param {Express.Multer.File} [params.audioFile] - Voice recording audio file.
  * @param {number} [params.userLat] - Optional user GPS latitude.
  * @param {number} [params.userLng] - Optional user GPS longitude.
+ * @param {string} [params.locationText] - Optional reverse-geocoded address.
  * @returns {Promise<object>} Structured civic complaint report.
  */
 export async function analyzeWithGemini({ text = "", file, audioFile, userLat, userLng, locationText }) {
   const gemini = getGeminiClient();
   const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
-  const fileInfo = file || audioFile ? {
-    mimetype: (file || audioFile).mimetype,
-    size: (file || audioFile).size
+  const primaryEvidence = file || audioFile;
+  const fileInfo = primaryEvidence ? {
+    filename: primaryEvidence.originalname,
+    mimetype: primaryEvidence.canonicalMime || primaryEvidence.mimetype,
+    size: primaryEvidence.size
   } : undefined;
 
   // If no Gemini API key configured, use fallback engine
@@ -290,14 +455,17 @@ export async function analyzeWithGemini({ text = "", file, audioFile, userLat, u
   }
 
   try {
-    const model = gemini.getGenerativeModel({
-      model: modelName,
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: COMPLAINT_JSON_SCHEMA,
-        temperature: 0.1
-      }
-    });
+    const model = gemini.getGenerativeModel(
+      {
+        model: modelName,
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: COMPLAINT_JSON_SCHEMA,
+          temperature: 0.1
+        }
+      },
+      { timeout: 25000 } // 25s timeout for AI response
+    );
 
     const parts = [];
 
@@ -323,18 +491,38 @@ Follow these strict rules:
     if (locationText) {
       promptText += `Reverse-Geocoded Address: ${locationText}\n`;
     }
+
+    if (file || audioFile) {
+      promptText += `\nMULTIMODAL EVIDENCE INSTRUCTIONS:
+Citizen has submitted evidence attachments. You MUST inspect and incorporate them:
+${file ? `- Attached Evidence Document/Image (${file.canonicalMime || file.mimetype}): Extract visible defect, textual notices (if PDF), or physical hazard.\n` : ""}
+${audioFile ? `- Attached Voice Recording (audio): Listen to the citizen's spoken grievance (Marathi, Hindi, or English) and transcribe the core problem into the description.\n` : ""}
+Synthesize all observations into the required JSON format. Ensure evidence_summary accurately describes what is seen or heard in the attachments.\n`;
+    }
+
     // Isolate user input inside data delimiters
-    promptText += `<citizen_complaint_data>\n${text || "No text provided, see attached media"}\n</citizen_complaint_data>\n`;
+    promptText += `<citizen_complaint_data>\n${text || "(Citizen submitted attached media evidence without typed text)"}\n</citizen_complaint_data>\n`;
 
     parts.push({ text: promptText });
 
-    // Handle multimodal media if provided (Photo, Video, PDF, Audio)
-    const mediaToAttach = file || audioFile;
-    if (mediaToAttach && mediaToAttach.buffer) {
+    // 1. Attach primary evidence file (Photo, PDF, Video) if provided
+    if (file && file.buffer) {
+      const mime = file.canonicalMime || normalizeMimeType(file.mimetype || detectMimeTypeFromMagicBytes(file.buffer), false);
       parts.push({
         inlineData: {
-          mimeType: mediaToAttach.mimetype,
-          data: mediaToAttach.buffer.toString("base64")
+          mimeType: mime,
+          data: file.buffer.toString("base64")
+        }
+      });
+    }
+
+    // 2. Attach voice recording audio if provided
+    if (audioFile && audioFile.buffer) {
+      const audioMime = audioFile.canonicalMime || normalizeMimeType(audioFile.mimetype || "audio/webm", true);
+      parts.push({
+        inlineData: {
+          mimeType: audioMime,
+          data: audioFile.buffer.toString("base64")
         }
       });
     }
@@ -345,7 +533,7 @@ Follow these strict rules:
 
     // Sanity-check coordinates
     if (!isWithinPune(structured.lat, structured.lng)) {
-      const fallbackLoc = resolvePuneLocation(text, userLat, userLng);
+      const fallbackLoc = resolvePuneLocation(text, userLat, userLng, locationText);
       structured.lat = fallbackLoc.lat;
       structured.lng = fallbackLoc.lng;
     }
@@ -354,13 +542,30 @@ Follow these strict rules:
     const schemaValidation = StructuredReportSchema.safeParse(structured);
     if (!schemaValidation.success) {
       console.warn("Gemini output violated strict schema, falling back to safe local extraction:", schemaValidation.error.message);
-      return fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo);
+      return fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo, locationText);
     }
 
     return schemaValidation.data;
   } catch (error) {
-    console.warn("Gemini API call failed or timed out, using fallback analyzer:", error.message);
-    return fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo);
+    const classified = classifyGeminiError(error, process.env.GEMINI_API_KEY);
+
+    // Clear server logging of the Gemini error (status and message, never the key)
+    console.error(`[GEMINI_ERROR] ${classified.logMessage}`);
+
+    // If it's a specific operational error (quota, invalid key, unsupported file, timeout),
+    // re-throw a structured GeminiServiceError so the route returns a user-friendly error!
+    if (["QUOTA_EXCEEDED", "INVALID_API_KEY", "UNSUPPORTED_FILE", "TIMEOUT"].includes(classified.code)) {
+      throw new GeminiServiceError(
+        classified.userMessage,
+        classified.status,
+        classified.code,
+        classified.userMessage
+      );
+    }
+
+    // Fall back to local heuristic analyzer for generic errors (e.g. offline testing)
+    console.warn("Falling back to local heuristic analyzer:", classified.cleanMessage);
+    return fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo, locationText);
   }
 }
 
@@ -386,7 +591,7 @@ export async function draftComplaintLetter({ report, language = "en" }) {
 
   if (gemini) {
     try {
-      const model = gemini.getGenerativeModel({ model: modelName });
+      const model = gemini.getGenerativeModel({ model: modelName }, { timeout: 20000 });
       const prompt = `Draft a formal, respectful, and legally sound municipal grievance letter in ${targetLang}.
 Report Details:
 - Category: ${report.category} (${report.subcategory})
@@ -412,7 +617,8 @@ Return as pure text with "SUBJECT: [Subject]" on the first line, followed by the
 
       return { subject, letterBody, language };
     } catch (err) {
-      console.warn("Letter drafting via Gemini failed, generating template letter:", err.message);
+      const classified = classifyGeminiError(err, process.env.GEMINI_API_KEY);
+      console.warn(`[GEMINI_LETTER_ERROR] ${classified.logMessage}`);
     }
   }
 
@@ -459,57 +665,53 @@ ${report.responsible_authority},
 सेवा में,
 श्रीमान सहायक आयुक्त / अधिशासी अभियंता,
 ${report.responsible_authority},
-पुणे नगर निगम (PMC), पुणे।
+पुणे नगर निगम, पुणे।
 
-विषय: ${report.location_text} में ${report.subcategory} के तत्काल समाधान हेतु।
+विषय: ${report.location_text} में ${report.subcategory} के संबंध में नागरिक शिकायत।
 
-महोदय,
+महोदय / महोदया,
 
-सविनय निवेदन है कि ${report.location_text} के समीप ${report.description} की गंभीर समस्या उत्पन्न हो गई है।
+सविनय निवेदन है कि ${report.location_text} पर ${report.description} की गंभीर समस्या बनी हुई है।
 
-इस स्थिति के कारण स्थानीय नागरिकों, विद्यार्थियों एवं राहगीरों को भारी कठिनाई का सामना करना पड़ रहा है। ${report.urgency_reason} इस शिकायत की गंभीरता श्रेणी ${report.severity}/५ है।
+इस कारण नागरिकों को भारी असुविधा हो रही है तथा ${report.urgency_reason} का खतरा बना हुआ है। इस समस्या की गंभीरता ${report.severity}/५ है।
 
-अतः आपसे करबद्ध प्रार्थना है कि पुणे नगर निगम के नागरिक घोषणापत्र (Citizen Charter) के अंतर्गत इस पर तत्काल संज्ञान लेते हुए आवश्यक मरम्मत व सफाई कार्य करवाने की कृपा करें।
+अतः आपसे विनम्र अनुरोध है कि नागरिक चार्टर के अनुसार निर्धारित समय सीमा में इसका निवारण करने की कृपा करें।
 
-सधन्यवाद,
 भवदीय नागरिक,
-[शिकायतकर्ता]
-स्थान: ${report.location_text}, पुणे।`,
+[नागरिक शिकायतकर्ता]
+पुणे, महाराष्ट्र।`,
       language: "hi"
     };
   }
 
   return {
-    subject: `Urgent Redressal Request: ${report.subcategory} at ${report.location_text} (Severity ${report.severity}/5)`,
+    subject: `Urgent Redressal Request: ${report.subcategory} at ${report.location_text}`,
     letterBody: `Date: ${today}
 
 To,
-The Ward Officer / Executive Engineer,
+The Executive Engineer / Ward Officer,
 ${report.responsible_authority},
-Pune Municipal Corporation, Pune, Maharashtra.
+Pune Municipal Corporation (PMC), Pune, Maharashtra.
 
-Subject: Immediate civic redressal required for ${report.subcategory} at ${report.location_text}
+Subject: Formal Grievance regarding ${report.subcategory} at ${report.location_text}
 
 Respected Sir / Madam,
 
-I am writing to formally bring to your urgent attention a serious civic defect observed at ${report.location_text}.
+I am writing to officially register a civic complaint regarding the hazardous condition at ${report.location_text}. Specifically, ${report.description}.
 
-Issue Description:
-${report.description}
-
-Ground Reality & Urgency:
+Public Impact & Urgency:
 ${report.urgency_reason}
 
-Observed Evidence:
+Evidence Corroboration:
 ${report.evidence_summary}
 
-As per the Pune Municipal Corporation Citizen's Charter, issues of this nature carry an official resolution SLA of 24 to 72 hours. Given the risk to pedestrian safety and public hygiene, I request you to depute an inspection squad and initiate corrective engineering works immediately.
+Under the statutory Citizen's Charter and grievance redressal policies of Pune Municipal Corporation, this defect (Urgency Level: ${report.severity}/5) requires priority inspection and time-bound remediation.
 
-Thanking you.
+I request you to issue immediate work orders to the concerned ward squad and acknowledge receipt of this formal complaint.
 
 Yours sincerely,
-Concerned Citizen Complainant
-CivicBridge Redressal Reference: #CB-PUN-${Date.now().toString().slice(-6)}
+A Concerned Resident of Pune
+Contact: [Privacy Shield Protected via CivicBridge]
 Pune, Maharashtra.`,
     language: "en"
   };

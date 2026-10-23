@@ -12,7 +12,7 @@ import {
   FileComplaintRequestSchema
 } from "../utils/validators.js";
 import { redactSensitiveData, scrubRawMediaBuffer } from "../services/redactService.js";
-import { analyzeWithGemini, draftComplaintLetter } from "../services/geminiService.js";
+import { analyzeWithGemini, draftComplaintLetter, GeminiServiceError } from "../services/geminiService.js";
 import { verifyComplaint, getExistingReports, appendReport } from "../services/verificationService.js";
 import {
   generateActionPlan,
@@ -106,6 +106,13 @@ router.post("/analyze", complaintUploadMiddleware, async (req, res, next) => {
       }
     });
   } catch (error) {
+    if (error instanceof GeminiServiceError || error.isUserFacing) {
+      return res.status(error.status || 500).json({
+        success: false,
+        error: error.userMessage || error.message,
+        code: error.code || "AI_ANALYSIS_FAILED"
+      });
+    }
     next(error);
   }
 });
