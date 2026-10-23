@@ -125,10 +125,10 @@ function getGeminiClient() {
  * @param {number|undefined} userLng - User GPS longitude.
  * @returns {{ locationText: string, lat: number, lng: number }}
  */
-function resolvePuneLocation(text = "", userLat, userLng) {
+function resolvePuneLocation(text = "", userLat, userLng, locationText) {
   if (typeof userLat === "number" && typeof userLng === "number" && isWithinPune(userLat, userLng)) {
     return {
-      locationText: "Citizen Geolocation (Pune, Maharashtra)",
+      locationText: locationText || "Citizen Geolocation (Pune, Maharashtra)",
       lat: userLat,
       lng: userLng
     };
@@ -161,9 +161,9 @@ function resolvePuneLocation(text = "", userLat, userLng) {
  * @param {object|undefined} fileInfo - Uploaded file metadata.
  * @returns {object} Structured complaint matching COMPLAINT_JSON_SCHEMA.
  */
-function fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo) {
+function fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo, locationText) {
   const lower = (text || "").toLowerCase();
-  const loc = resolvePuneLocation(text, userLat, userLng);
+  const loc = resolvePuneLocation(text, userLat, userLng, locationText);
 
   let category = "Roads & Footpaths";
   let subcategory = "Potholes";
@@ -275,7 +275,7 @@ function fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo) {
  * @param {number} [params.userLng] - Optional user GPS longitude.
  * @returns {Promise<object>} Structured civic complaint report.
  */
-export async function analyzeWithGemini({ text = "", file, audioFile, userLat, userLng }) {
+export async function analyzeWithGemini({ text = "", file, audioFile, userLat, userLng, locationText }) {
   const gemini = getGeminiClient();
   const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
@@ -286,7 +286,7 @@ export async function analyzeWithGemini({ text = "", file, audioFile, userLat, u
 
   // If no Gemini API key configured, use fallback engine
   if (!gemini) {
-    return fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo);
+    return fallbackAnalyzeComplaint(text, userLat, userLng, fileInfo, locationText);
   }
 
   try {
@@ -319,6 +319,9 @@ Follow these strict rules:
     let promptText = `${systemInstruction}\n\n`;
     if (userLat && userLng) {
       promptText += `User GPS Coordinates: lat=${userLat}, lng=${userLng}\n`;
+    }
+    if (locationText) {
+      promptText += `Reverse-Geocoded Address: ${locationText}\n`;
     }
     // Isolate user input inside data delimiters
     promptText += `<citizen_complaint_data>\n${text || "No text provided, see attached media"}\n</citizen_complaint_data>\n`;

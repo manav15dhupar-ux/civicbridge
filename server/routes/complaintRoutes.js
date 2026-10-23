@@ -52,13 +52,14 @@ router.post("/analyze", complaintUploadMiddleware, async (req, res, next) => {
     const rawText = req.body.text || "";
     const userLat = req.body.lat ? parseFloat(req.body.lat) : undefined;
     const userLng = req.body.lng ? parseFloat(req.body.lng) : undefined;
+    const locationText = req.body.location_text || undefined;
     const consent = req.body.consent;
 
     const file = req.files && req.files.file ? req.files.file[0] : undefined;
     const audioFile = req.files && req.files.audio ? req.files.audio[0] : undefined;
 
     // 1. Input Validation
-    const validation = validateComplaintInput({ text: rawText, consent, lat: userLat, lng: userLng }, file, audioFile);
+    const validation = validateComplaintInput({ text: rawText, consent, lat: userLat, lng: userLng, location_text: locationText }, file, audioFile);
     if (!validation.valid) {
       return res.status(400).json({
         success: false,
@@ -75,7 +76,8 @@ router.post("/analyze", complaintUploadMiddleware, async (req, res, next) => {
       file,
       audioFile,
       userLat,
-      userLng
+      userLng,
+      locationText
     });
 
     // 4. Verification against existing reports in Pune (<200m Haversine + Similarity)

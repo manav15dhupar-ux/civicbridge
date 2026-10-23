@@ -13,6 +13,7 @@ import dotenv from "dotenv";
 
 import complaintRoutes from "./routes/complaintRoutes.js";
 import authorityRoutes from "./routes/authorityRoutes.js";
+import locationRoutes from "./routes/locationRoutes.js";
 
 // Load environment variables from .env
 dotenv.config();
@@ -144,6 +145,7 @@ app.get("/health", (req, res) => {
 // Mount modular API routers
 app.use("/api/complaints", complaintRoutes);
 app.use("/api/authorities", authorityRoutes);
+app.use("/api/location", locationRoutes);
 
 /**
  * Serve static frontend files from public/ directory.

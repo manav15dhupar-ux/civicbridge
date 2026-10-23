@@ -98,6 +98,26 @@ export async function fetchAuthorities() {
 }
 
 /**
+ * Reverse geocodes coordinates to a human-readable Pune address with caching.
+ * @param {number} lat - Latitude.
+ * @param {number} lng - Longitude.
+ * @returns {Promise<{ address: string, details: object, isWithinPune: boolean, confidenceBadge: object }>}
+ */
+export async function fetchReverseGeocode(lat, lng) {
+  const result = await request(`/api/location/reverse-geocode?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`);
+  return result.data;
+}
+
+/**
+ * Fetches official Pune municipal boundary box.
+ * @returns {Promise<object>}
+ */
+export async function fetchPuneBounds() {
+  const result = await request("/api/location/bounds");
+  return result.data;
+}
+
+/**
  * Checks system health and Gemini configuration status.
  * @returns {Promise<object>}
  */

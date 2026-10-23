@@ -270,7 +270,8 @@ export const AnalyzePayloadSchema = z.object({
     return typeof val === "number" ? val : parseFloat(val);
   }).refine((val) => val === undefined || (!Number.isNaN(val) && val >= -180 && val <= 180), {
     message: "Invalid longitude (-180 to 180)."
-  })
+  }),
+  location_text: z.string().max(400, "Location text must not exceed 400 characters").optional()
 }).strict();
 
 /**
