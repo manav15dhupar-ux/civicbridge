@@ -50,6 +50,22 @@ export async function draftLetter(report, language = "en") {
 }
 
 /**
+ * Formally files the complaint, generates a tracking ID, appends to reports.json,
+ * and retrieves status timeline and filing routes (online/offline/whatsapp/email).
+ * @param {object} report - Structured complaint report.
+ * @param {object} actionPlan - Action plan details.
+ * @param {string} [citizenNote=""] - Optional citizen note.
+ * @returns {Promise<object>} Complete filing confirmation payload.
+ */
+export async function fileComplaint(report, actionPlan, citizenNote = "") {
+  return request("/api/complaints/file", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ report, actionPlan, citizenNote })
+  });
+}
+
+/**
  * Simulates official grievance filing with the responsible Pune authority.
  * @param {object} report - Structured report.
  * @param {object} actionPlan - Action plan details.

@@ -2,22 +2,37 @@
   "authorities": [
     {
       "id": "pmc_road",
+      "category": "Roads & Footpaths",
+      "categories": ["Roads & Footpaths", "Potholes", "Broken Asphalt", "Footpath Encroachment"],
+      "authorityName": "Pune Municipal Corporation",
+      "department": "Road & Infrastructure Department",
       "name": "Pune Municipal Corporation - Road Department",
       "marathiName": "पुणे महानगरपालिका - रस्ते विभाग",
       "hindiName": "पुणे नगर निगम - सड़क विभाग",
-      "categories": ["Roads & Footpaths", "Potholes", "Broken Asphalt", "Footpath Encroachment"],
       "jurisdiction": "Pune Municipal Corporation (PMC)",
       "portalUrl": "https://complaint.punecorporation.org/",
       "portalName": "PMC Care Portal (Grievance Redressal)",
       "helpline": "1800 1030 222",
       "whatsapp": "+91 96899 00002",
       "email": "pmccare@punecorporation.org",
+      "officeAddress": "PMC Main Annex Building, Shivajinagar, Pune - 411005",
       "slaHours": 72,
+      "offlineGuide": {
+        "officeName": "PMC Road Department / Nearest Ward Junior Engineer Office",
+        "officeAddress": "PMC Main Building, Shivajinagar, Pune - 411005 (Or local Ward Office at Kothrud, Aundh, Hadapsar, Viman Nagar)",
+        "documentsToCarry": [
+          "2 printed color photographs showing defect with identifiable landmark",
+          "Printed formal grievance application letter addressed to Junior Engineer (Roads)",
+          "Government photo ID (Voter ID / Driving License) for visitor register"
+        ],
+        "bestTimeToVisit": "10:30 AM - 1:00 PM (Monday to Friday, when Junior & Deputy Engineers are available before site visits)",
+        "whatToSay": "I am here to register an urgent road hazard grievance under the PMC Citizen's Charter 72-hour SLA. This defect creates an immediate skidding and accident risk for two-wheelers. Please stamp my duplicate copy with the ward in-ward acknowledgment number."
+      },
       "onlineFilingSteps": [
         "Visit PMC Care (complaint.punecorporation.org) or download the PMC Care Mobile App.",
         "Select 'Roads & Traffic' -> 'Pothole / Road Repair' category.",
         "Upload geotagged photo, landmark name, and nearest ward office.",
-        "Submit to obtain a 10-digit PMC tracking token (e.g. PMC-2026-XXXX)."
+        "Submit to obtain an official PMC tracking token (e.g. PMC-2026-XXXX)."
       ],
       "offlineOfficeDetails": {
         "headOffice": "PMC Main Building, Shivajinagar, Pune - 411005",
@@ -39,17 +54,32 @@
     },
     {
       "id": "pmc_drainage",
+      "category": "Drainage & Sewage",
+      "categories": ["Drainage & Sewage", "Drain Overflow", "Blocked Gutter", "Open Manhole", "Choked Chamber"],
+      "authorityName": "Pune Municipal Corporation",
+      "department": "Drainage & Sewerage Maintenance Department",
       "name": "PMC - Drainage & Sewerage Maintenance Department",
       "marathiName": "पुणे महानगरपालिका - मलनिःसारण व जलनिस्सारण विभाग",
       "hindiName": "पुणे नगर निगम - जल निकासी और सीवरेज विभाग",
-      "categories": ["Drainage & Sewage", "Drain Overflow", "Blocked Gutter", "Open Manhole", "Choked Chamber"],
       "jurisdiction": "Pune Municipal Corporation (PMC)",
       "portalUrl": "https://complaint.punecorporation.org/",
       "portalName": "PMC Care Portal (Drainage Emergency Cell)",
       "helpline": "020-25501000",
       "whatsapp": "+91 96899 00002",
       "email": "drainage@punecorporation.org",
+      "officeAddress": "Drainage Dept, 3rd Floor, PMC New Annex Building, Shivajinagar, Pune - 411005",
       "slaHours": 24,
+      "offlineGuide": {
+        "officeName": "PMC Drainage Department / Ward Health & Drainage Cell",
+        "officeAddress": "Drainage Dept, 3rd Floor, PMC New Annex Building, Shivajinagar, Pune",
+        "documentsToCarry": [
+          "Printed grievance letter detailing sewage contamination and public health risk",
+          "Photographs showing overflowing manhole or choked chamber adjacent to property",
+          "Photo ID"
+        ],
+        "bestTimeToVisit": "Round the clock for emergency hazards; 10:00 AM - 1:00 PM for Sub-Divisional Engineer meetings",
+        "whatToSay": "I am reporting an acute sewage chamber overflow at [Location]. It is a critical vector-borne disease and health hazard. Under PMC Emergency SLA, this requires immediate suction tanker dispatch within 24 hours."
+      },
       "onlineFilingSteps": [
         "Go to complaint.punecorporation.org or use PMC WhatsApp Grievance Bot (+91 96899 00002).",
         "Send 'Drainage Emergency' with precise location and photo.",
@@ -72,17 +102,31 @@
     },
     {
       "id": "pmc_waste",
+      "category": "Garbage & Waste",
+      "categories": ["Garbage & Waste", "Garbage Dump", "Missed Collection", "Debris Dumping", "Burning Waste"],
+      "authorityName": "Pune Municipal Corporation",
+      "department": "Solid Waste Management Department (Swachh Pune)",
       "name": "PMC - Solid Waste Management Department (Swachh Pune)",
       "marathiName": "पुणे महानगरपालिका - घनकचरा व्यवस्थापन विभाग",
       "hindiName": "पुणे नगर निगम - ठोस अपशिष्ट प्रबंधन विभाग",
-      "categories": ["Garbage & Waste", "Garbage Dump", "Missed Collection", "Debris Dumping", "Burning Waste"],
       "jurisdiction": "Pune Municipal Corporation (PMC)",
       "portalUrl": "https://complaint.punecorporation.org/",
       "portalName": "Swachhata App / PMC Waste Redressal",
       "helpline": "1800 1030 222",
       "whatsapp": "+91 96899 00002",
       "email": "solidwaste@punecorporation.org",
+      "officeAddress": "Solid Waste Management Cell, PMC Annex Building, Shivajinagar, Pune - 411005",
       "slaHours": 48,
+      "offlineGuide": {
+        "officeName": "Ward Health & Sanitation Inspector Office",
+        "officeAddress": "Respective Ward Health Office (Aundh, Kothrud, Sinhagad Road, etc.)",
+        "documentsToCarry": [
+          "Photographs showing chronic garbage accumulation or illegal open burning",
+          "Petition letter signed by neighboring residents or society secretary"
+        ],
+        "bestTimeToVisit": "8:30 AM - 11:00 AM (Sanitary Inspectors conduct morning field visits before 11:30 AM)",
+        "whatToSay": "This spot has become an illegal chronic dumping point attracting stray dogs and cattle. We request immediate clearance by SWaCH collection vehicles and placement of a dedicated municipal bin."
+      },
       "onlineFilingSteps": [
         "Use Swachhata-MoHUA App or PMC Care Web Portal.",
         "Snap picture of chronic dump (Chroni Spot / Kachra Kundi).",
@@ -104,17 +148,31 @@
     },
     {
       "id": "msedcl_pmc_light",
+      "category": "Street Lighting & Electricity",
+      "categories": ["Street Lighting & Electricity", "Broken Street Light", "Exposed Wire", "Transformer Sparking", "Power Outage"],
+      "authorityName": "Maharashtra State Electricity Distribution Co. Ltd. (MSEDCL)",
+      "department": "Pune Urban Electrical & Streetlight Division",
       "name": "MSEDCL (Mahavitaran) & PMC Street Light Cell",
       "marathiName": "महावितरण व पुणे मनपा विद्युत विभाग",
       "hindiName": "महावितरण और पुणे मनपा विद्युत विभाग",
-      "categories": ["Street Lighting & Electricity", "Broken Street Light", "Exposed Wire", "Transformer Sparking", "Power Outage"],
       "jurisdiction": "Pune Urban Circle (Mahavitaran) / PMC Ward Electricity Cell",
       "portalUrl": "https://wss.mahadiscom.in/wss/wss?uiActionName=getCustGrievanceReg",
       "portalName": "Mahavitaran Consumer Grievance / PMC Streetlight Cell",
       "helpline": "1912 / 1800 233 3435",
       "whatsapp": "+91 99303 99303",
       "email": "helpdesk@mahadiscom.in",
+      "officeAddress": "MSEDCL Pune Circle Office, Rasta Peth, Pune - 411011",
       "slaHours": 48,
+      "offlineGuide": {
+        "officeName": "MSEDCL Sub-Division Office / Ward Electrical Cell",
+        "officeAddress": "MSEDCL Circle Office, Rasta Peth, Pune or local sub-division (Model Colony, Kothrud)",
+        "documentsToCarry": [
+          "Pole Number painted in yellow on municipal pole (e.g. KOT-142)",
+          "Photographs showing exposed live wire or broken streetlight fixture"
+        ],
+        "bestTimeToVisit": "11:00 AM - 2:00 PM for Section Engineer; 24/7 Breakdown desk for emergency sparking",
+        "whatToSay": "I am reporting a severe electrical hazard with exposed conductors / non-functioning streetlights on [Street]. This poses an electrocution danger and endangers pedestrians at night."
+      },
       "onlineFilingSteps": [
         "For streetlights: Dial PMC Toll Free 1800 1030 222 or log on complaint.punecorporation.org under 'Electrical Department'.",
         "For exposed live wires / transformer sparks: Call Mahavitaran emergency 1912 immediately.",
@@ -135,17 +193,31 @@
     },
     {
       "id": "pmc_water",
+      "category": "Water Supply",
+      "categories": ["Water Supply", "Pipeline Leakage", "Contaminated Water", "Low Water Pressure", "No Water Supply"],
+      "authorityName": "Pune Municipal Corporation",
+      "department": "Water Supply & Pumping Maintenance Department",
       "name": "PMC - Water Supply & Pipeline Maintenance Department",
       "marathiName": "पुणे महानगरपालिका - पाणी पुरवठा विभाग",
       "hindiName": "पुणे नगर निगम - जल आपूर्ति विभाग",
-      "categories": ["Water Supply", "Pipeline Leakage", "Contaminated Water", "Low Water Pressure", "No Water Supply"],
       "jurisdiction": "Pune Municipal Corporation (PMC)",
       "portalUrl": "https://complaint.punecorporation.org/",
       "portalName": "PMC Water Grievance Cell",
       "helpline": "020-25501383",
       "whatsapp": "+91 96899 00002",
       "email": "water@punecorporation.org",
+      "officeAddress": "Parvati Water Works (Pumping Station), Parvati, Pune - 411009",
       "slaHours": 24,
+      "offlineGuide": {
+        "officeName": "Executive Engineer Office, Water Supply Division",
+        "officeAddress": "Chaturshringi Water Works Office, Senapati Bapat Road or Parvati Water Works",
+        "documentsToCarry": [
+          "Clear photograph of bursting pipeline or muddy water sample in clean bottle",
+          "Copy of recent PMC Property Tax / Water bill index number"
+        ],
+        "bestTimeToVisit": "11:00 AM - 1:30 PM (When Executive Engineers examine daily water distribution logs)",
+        "whatToSay": "Clean drinking municipal water is gushing onto the road causing immense water loss and road damage. We request urgent valve isolation and pipeline repair squad dispatch."
+      },
       "onlineFilingSteps": [
         "Register on PMC Care under 'Water Supply' -> 'Main Pipeline Leakage / Contamination'.",
         "Specify if water is visibly muddy, emitting foul smell, or gushing onto roadway.",
@@ -166,17 +238,31 @@
     },
     {
       "id": "pune_traffic_police",
+      "category": "Traffic & Obstructions",
+      "categories": ["Traffic & Obstructions", "Signal Not Working", "Illegal Parking", "Road Encroachment", "Abandoned Vehicle"],
+      "authorityName": "Pune City Police Commissionerate",
+      "department": "Traffic Control Branch & Anti-Encroachment Wing",
       "name": "Pune Traffic Police & Encroachment Department",
       "marathiName": "पुणे शहर वाहतूक पोलीस व अतिक्रमण निर्मूलन विभाग",
       "hindiName": "पुणे यातायात पुलिस और अतिक्रमण विभाग",
-      "categories": ["Traffic & Obstructions", "Signal Not Working", "Illegal Parking", "Road Encroachment", "Abandoned Vehicle"],
       "jurisdiction": "Pune City Police Commissionerate",
       "portalUrl": "https://punetrafficpolice.gov.in/",
       "portalName": "MahaTraffic App / Pune Traffic Police Portal",
       "helpline": "020-26685000",
       "whatsapp": "+91 84549 00099",
       "email": "trafficpune@gmail.com",
+      "officeAddress": "Pune Traffic Police Headquarters, Yerwada, Pune - 411006",
       "slaHours": 12,
+      "offlineGuide": {
+        "officeName": "Local Traffic Police Division (Deccan, Hinjawadi, Swargate, Hadapsar)",
+        "officeAddress": "Nearest Traffic Division Chowki (e.g. Deccan Traffic Division near Goodluck Chowk)",
+        "documentsToCarry": [
+          "Clear geotagged photograph showing obstruction and vehicle registration plate if applicable",
+          "Exact landmark intersection / chowk direction"
+        ],
+        "bestTimeToVisit": "Anytime (24/7 Duty Officer present at all Traffic Divisions)",
+        "whatToSay": "I am reporting severe traffic obstruction and safety hazard at [Intersection]. Vehicles and pedestrians are blocked. Please deploy a beat marshal or towing crane to clear the corridor."
+      },
       "onlineFilingSteps": [
         "Send geo-tagged photo with vehicle number or junction to WhatsApp Helpline +91 84549 00099.",
         "Or use MahaTraffic App -> 'Report Violation / Traffic Obstruction'.",

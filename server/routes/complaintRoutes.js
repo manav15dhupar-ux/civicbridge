@@ -9,7 +9,13 @@ import { validateComplaintInput, MAX_FILE_SIZE_BYTES } from "../utils/validators
 import { redactSensitiveData, scrubRawMediaBuffer } from "../services/redactService.js";
 import { analyzeWithGemini, draftComplaintLetter } from "../services/geminiService.js";
 import { verifyComplaint, getExistingReports, appendReport } from "../services/verificationService.js";
-import { generateActionPlan } from "../services/actionPlanService.js";
+import {
+  generateActionPlan,
+  matchAuthority,
+  generateCopyReadyComplaint,
+  buildShareLinks,
+  buildStatusTimeline
+} from "../services/actionPlanService.js";
 
 const router = express.Router();
 
@@ -114,6 +120,119 @@ router.post("/draft-letter", async (req, res, next) => {
     return res.json({
       success: true,
       data: draft
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/complaints/file
+ * Handles the "File this complaint" workflow:
+ * - Generates official tracking ID (PMC-2026-XXXXX)
+ * - Persists strictly redacted report to data/reports.json
+ * - Constructs 4-stage status timeline: Submitted -> Verified -> Forwarded -> Resolved
+ * - Returns online filing route, offline route with "what to say", and pre-filled WhatsApp/email links.
+ */
+router.post("/file", async (req, res, next) => {
+  try {
+    const { report, actionPlan, citizenNote = "" } = req.body;
+    if (!report || !report.category) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing or invalid report payload for filing."
+      });
+    }
+
+    // Safety: ensure any additional user notes are strictly redacted
+    const { cleanedText: redactedNote } = redactSensitiveData(citizenNote);
+
+    const timestamp = new Date().toISOString();
+    const trackingToken = `PMC-2026-${Math.floor(10000 + Math.random() * 90000)}`;
+    const newReportId = `PUN-REP-${Math.floor(1020 + Math.random() * 8900)}`;
+
+    const authority =
+      actionPlan?.authority ||
+      (await matchAuthority(report.category, report.subcategory));
+
+    const persistedRecord = {
+      id: newReportId,
+      trackingId: trackingToken,
+      category: report.category,
+      subcategory: report.subcategory,
+      severity: report.severity,
+      description: report.description,
+      location_text: report.location_text,
+      lat: report.lat,
+      lng: report.lng,
+      evidence_summary: report.evidence_summary,
+      urgency_reason: report.urgency_reason,
+      responsible_authority: authority.name,
+      authorityId: authority.id || "pmc_road",
+      confidence: report.confidence || 0.95,
+      status: "Forwarded to Ward Squad",
+      reporter_count: 1,
+      createdAt: timestamp,
+      citizenNote: redactedNote || undefined,
+      ward: report.location_text.includes("Kothrud")
+        ? "Kothrud-Bavdhan Ward 12"
+        : report.location_text.includes("Baner")
+        ? "Aundh-Baner Ward 09"
+        : report.location_text.includes("Viman")
+        ? "Wadgaon Sheri - Viman Nagar Ward 03"
+        : "PMC Central Ward Redressal"
+    };
+
+    await appendReport(persistedRecord);
+
+    const copyReadyText = generateCopyReadyComplaint(report, authority, trackingToken);
+    const shareLinks = buildShareLinks(authority, copyReadyText, trackingToken);
+    const statusTimeline = buildStatusTimeline(trackingToken, authority);
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        trackingId: trackingToken,
+        reportId: newReportId,
+        authority: {
+          id: authority.id,
+          name: authority.name,
+          authorityName: authority.authorityName || "Pune Municipal Corporation",
+          department: authority.department || "Municipal Redressal Cell",
+          portalUrl: authority.portalUrl || "https://complaint.punecorporation.org/",
+          portalName: authority.portalName || "PMC Care Portal",
+          helpline: authority.helpline || "1800 1030 222",
+          email: authority.email || "pmccare@punecorporation.org",
+          officeAddress: authority.officeAddress || "PMC Main Building, Shivajinagar, Pune"
+        },
+        statusTimeline,
+        onlineRoute: {
+          portalUrl: authority.portalUrl || "https://complaint.punecorporation.org/",
+          portalName: authority.portalName || "PMC Care Portal",
+          copyReadyText,
+          instructions: authority.onlineFilingSteps || [
+            "Visit the official municipal portal",
+            "Select the matching category",
+            "Paste the copy-ready grievance text and submit"
+          ]
+        },
+        offlineRoute: authority.offlineGuide || {
+          officeName: authority.name,
+          officeAddress: authority.officeAddress || "PMC Main Building, Shivajinagar, Pune",
+          documentsToCarry: [
+            "2 printed color photographs showing defect",
+            "Printed formal grievance application letter",
+            "Government photo ID for visitor register"
+          ],
+          bestTimeToVisit: "10:30 AM - 1:00 PM (Monday to Friday)",
+          whatToSay: `I am here to register an urgent ${report.category} grievance under the PMC Citizen's Charter ${authority.slaHours || 48}-hour SLA.`
+        },
+        shareRoutes: {
+          whatsappUrl: shareLinks.whatsappUrl,
+          emailUrl: shareLinks.emailUrl
+        },
+        savedReport: persistedRecord
+      }
     });
   } catch (error) {
     next(error);

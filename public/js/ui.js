@@ -383,11 +383,260 @@ export function renderActionPlanCard(actionPlan) {
           <span>📝</span>
           <span>Draft Complaint Letter</span>
         </button>
-        <button id="btnSubmitMock" class="flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-xs bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.99] transition shadow-sm">
+        <a href="#fileComplaintSlot" class="flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-xs bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.99] transition shadow-sm text-center">
           <span>🚀</span>
-          <span>Submit to Authority (Mock API)</span>
+          <span>Proceed to File It ↓</span>
+        </a>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Renders the dedicated "File this complaint" step panel after the action plan.
+ * Displays online route (copy-ready text + portal button), offline route
+ * (office name, documents, best time, what to say), WhatsApp/Email share,
+ * and 4-stage status timeline (Submitted -> Verified -> Forwarded -> Resolved).
+ * @param {object} data - Filing data payload.
+ * @returns {string} HTML string.
+ */
+export function renderFileComplaintPanel(data) {
+  const auth = data.authority || {};
+  const timeline = data.statusTimeline || {
+    currentStage: "Forwarded",
+    stages: [
+      { id: "submitted", name: "Submitted", status: "completed", timestamp: "Completed", description: "Complaint registered" },
+      { id: "verified", name: "Verified", status: "completed", timestamp: "Completed", description: "AI & spatial verified" },
+      { id: "forwarded", name: "Forwarded", status: "active", timestamp: "In Progress", description: "Dispatched to Ward Junior Engineer" },
+      { id: "resolved", name: "Resolved", status: "pending", timestamp: `Within ${auth.slaHours || 48}h`, description: "Resolution verification & sign-off" }
+    ]
+  };
+
+  const offline = data.offlineRoute || data.offlineGuide || auth.offlineGuide || {
+    officeName: auth.name,
+    officeAddress: auth.officeAddress || "PMC Main Building, Shivajinagar, Pune",
+    documentsToCarry: [
+      "2 printed color photographs of defect",
+      "Formal grievance application letter",
+      "Government photo ID for visitor register"
+    ],
+    bestTimeToVisit: "10:30 AM - 1:00 PM (Monday to Friday)",
+    whatToSay: "I am registering an urgent civic defect at this location under statutory PMC SLAs."
+  };
+
+  const copyText = data.onlineRoute?.copyReadyText || data.copyReadyText || "";
+  const portalUrl = auth.portalUrl || "https://complaint.punecorporation.org/";
+  const portalName = auth.portalName || "PMC Care Portal";
+
+  const share = data.shareRoutes || data.shareLinks || {
+    whatsappUrl: `https://wa.me/?text=${encodeURIComponent(copyText)}`,
+    emailUrl: `mailto:${auth.email || 'pmccare@punecorporation.org'}?subject=${encodeURIComponent('URGENT: Civic Grievance')}&body=${encodeURIComponent(copyText)}`
+  };
+
+  const trackingId = data.trackingId || data.initialTrackingId || "PMC-2026-PENDING";
+  const isFiled = Boolean(data.isFiled);
+
+  return `
+    <div class="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-7 shadow-sm space-y-6">
+
+      <!-- Header & Tracking Banner -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full ${isFiled ? 'bg-emerald-500 animate-pulse' : 'bg-blue-600'}"></span>
+            <span class="text-xs font-bold uppercase tracking-wider text-blue-600">Step 5: File This Complaint</span>
+          </div>
+          <h3 class="text-xl font-extrabold text-slate-900 mt-1">Official Municipal Filing Hub</h3>
+          <p class="text-xs text-slate-500 mt-0.5">
+            ${auth.authorityName || "Pune Municipal Corporation"} • ${auth.department || "Public Grievance Cell"}
+          </p>
+        </div>
+        <div class="flex items-center gap-2 self-start sm:self-center">
+          <div class="bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-xl text-right">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Tracking Token</span>
+            <span id="filingTrackingToken" class="font-mono text-sm font-extrabold text-blue-600">${trackingId}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4-Stage Status Timeline: Submitted -> Verified -> Forwarded -> Resolved -->
+      <div class="space-y-3 bg-slate-50/70 p-4 rounded-2xl border border-slate-200/80">
+        <div class="flex items-center justify-between">
+          <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wide">Live Grievance Lifecycle</h4>
+          <span class="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+            ${isFiled ? 'Active & Dispatched' : 'Ready for Submission'}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 pt-1">
+          ${timeline.stages.map((stage, idx) => {
+            const isCompleted = stage.status === "completed" || (isFiled && (stage.id === "submitted" || stage.id === "verified"));
+            const isActive = stage.status === "active" || (isFiled && stage.id === "forwarded");
+            const badgeClass = isCompleted
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : isActive
+              ? "bg-blue-50 border-blue-300 text-blue-800 ring-2 ring-blue-500/20"
+              : "bg-white border-slate-200 text-slate-400";
+
+            const icon = isCompleted
+              ? "✓"
+              : isActive
+              ? "⚡"
+              : `${idx + 1}`;
+
+            return `
+              <div class="p-3 rounded-xl border ${badgeClass} text-xs flex flex-col justify-between transition">
+                <div class="flex items-center justify-between gap-1 mb-1.5">
+                  <span class="w-5 h-5 rounded-full flex items-center justify-center font-bold text-[11px] ${
+                    isCompleted ? 'bg-emerald-500 text-white' : isActive ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-600'
+                  }">
+                    ${icon}
+                  </span>
+                  <span class="text-[10px] font-mono text-slate-500 font-medium">${stage.timestamp}</span>
+                </div>
+                <div>
+                  <span class="font-bold text-slate-900 block text-xs">${stage.name}</span>
+                  <span class="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">${stage.description}</span>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </div>
+
+      <!-- Two-Column Routes Grid: Online vs Offline -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
+
+        <!-- Online Route Panel -->
+        <div class="space-y-3 p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-base">🌐</span>
+              <h4 class="text-sm font-bold text-slate-900">Online Route</h4>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-mono">PMC Care Web</span>
+          </div>
+
+          <p class="text-xs text-slate-500">
+            Use the official municipal grievance portal with this pre-formatted, copy-ready text:
+          </p>
+
+          <textarea
+            id="filingCopyReadyText"
+            rows="6"
+            readonly
+            class="w-full text-xs font-mono p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 leading-relaxed"
+          >${copyText}</textarea>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 mt-auto">
+            <button
+              type="button"
+              id="btnCopyComplaintText"
+              class="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
+            >
+              <span>📋</span>
+              <span>Copy Text</span>
+            </button>
+            <a
+              href="${portalUrl}"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-sm text-center"
+            >
+              <span>Open Portal</span>
+              <span>↗</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Offline Route Panel -->
+        <div class="space-y-3 p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-base">🏢</span>
+              <h4 class="text-sm font-bold text-slate-900">Offline Route (Ward Visit)</h4>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-mono">In-Person</span>
+          </div>
+
+          <div class="text-xs space-y-2 text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+            <div>
+              <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Office Name & Address</span>
+              <span class="font-medium text-slate-800">${offline.officeName || auth.name}</span>
+              <span class="text-[11px] text-slate-500 block mt-0.5">${offline.officeAddress || auth.officeAddress || "PMC Main Building, Shivajinagar, Pune"}</span>
+            </div>
+
+            <div class="pt-1 border-t border-slate-200">
+              <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">Best Time to Visit</span>
+              <span class="text-emerald-700 font-semibold">${offline.bestTimeToVisit || "10:30 AM - 1:00 PM (Monday to Friday)"}</span>
+            </div>
+
+            <div class="pt-1 border-t border-slate-200">
+              <span class="font-bold text-slate-900 block text-[11px] uppercase tracking-wide">What to Carry</span>
+              <ul class="list-disc list-inside mt-0.5 space-y-0.5 text-[11px] text-slate-600">
+                ${(offline.documentsToCarry || [
+                  "2 printed photographs showing defect with identifiable landmark",
+                  "Printed grievance application letter addressed to Ward Officer",
+                  "Government photo ID for visitor register"
+                ]).map((doc) => `<li>${doc}</li>`).join("")}
+              </ul>
+            </div>
+          </div>
+
+          <!-- What To Say Script Box -->
+          <div class="bg-amber-50/70 border border-amber-200/90 rounded-xl p-3 text-xs text-amber-950 mt-auto">
+            <span class="font-bold block text-[10px] uppercase tracking-wide text-amber-900 mb-1">
+              💬 What to Say to the Junior Engineer:
+            </span>
+            <p class="italic text-[11px] leading-relaxed">
+              "${offline.whatToSay || `I am here to register an urgent civic defect at this location under statutory PMC SLAs. Please provide my in-ward acknowledgment stamp.`}"
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- WhatsApp & Email Instant Escalation Row -->
+      <div class="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 text-white flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="space-y-0.5 text-center sm:text-left">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300">Prefilled Quick Escalation</h4>
+          <p class="text-xs text-slate-400">Share with PMC WhatsApp bot or mail the department desk in 1 click</p>
+        </div>
+        <div class="flex items-center gap-2.5 w-full sm:w-auto">
+          <a
+            href="${share.whatsappUrl}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white transition shadow-sm"
+          >
+            <span>💬</span>
+            <span>WhatsApp Share</span>
+          </a>
+          <a
+            href="${share.emailUrl}"
+            class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 font-bold text-xs text-white transition shadow-sm border border-slate-600"
+          >
+            <span>✉️</span>
+            <span>Email Authority</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Direct Official Dispatch CTA -->
+      <div class="pt-2">
+        <button
+          type="button"
+          id="btnExecuteFiling"
+          class="w-full py-3.5 px-6 rounded-2xl font-bold text-xs sm:text-sm text-white transition shadow-md flex items-center justify-center gap-2 ${
+            isFiled
+              ? 'bg-emerald-600 hover:bg-emerald-700 cursor-default'
+              : 'bg-blue-600 hover:bg-blue-700 active:scale-[0.99]'
+          }"
+        >
+          <span>${isFiled ? '✓' : '🚀'}</span>
+          <span>${isFiled ? `Grievance Filed & Logged (#${trackingId})` : 'File This Complaint & Generate Tracking Token'}</span>
         </button>
       </div>
+
     </div>
   `;
 }

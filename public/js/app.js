@@ -4,7 +4,7 @@
  * letter drafting, and mock PMC Care dispatch.
  */
 
-import { analyzeComplaint, draftLetter, submitMockGrievance, fetchReports, checkHealth } from "./api.js";
+import { analyzeComplaint, draftLetter, submitMockGrievance, fileComplaint, fetchReports, checkHealth } from "./api.js";
 import { initMap, setUserLocation, renderReportsOnMap, focusCoordinate } from "./map.js";
 import { startRecording, stopRecording, isAudioRecordingSupported, clearRecording } from "./audio.js";
 import {
@@ -12,7 +12,8 @@ import {
   renderStructuredCard,
   renderVerificationCard,
   renderPrivacyShieldCard,
-  renderActionPlanCard
+  renderActionPlanCard,
+  renderFileComplaintPanel
 } from "./ui.js";
 
 /**
@@ -235,6 +236,23 @@ function renderAnalysisResults(data) {
   if (privacySlot) privacySlot.innerHTML = renderPrivacyShieldCard(data.privacyShield);
   if (actionPlanSlot) actionPlanSlot.innerHTML = renderActionPlanCard(data.actionPlan);
 
+  // Render Step 5: File This Complaint Panel (after the action plan)
+  const fileSlot = document.getElementById("fileComplaintSlot");
+  if (fileSlot) {
+    fileSlot.innerHTML = renderFileComplaintPanel({
+      authority: data.actionPlan.authority,
+      report: data.structuredReport,
+      actionPlan: data.actionPlan,
+      trackingId: data.actionPlan.initialTrackingId,
+      offlineRoute: data.actionPlan.offlineGuide,
+      copyReadyText: data.actionPlan.copyReadyText,
+      shareRoutes: data.actionPlan.shareLinks,
+      statusTimeline: data.actionPlan.statusTimeline,
+      isFiled: false
+    });
+    attachFilingPanelListeners(data);
+  }
+
   // Hook up dynamically rendered Action buttons
   const btnLetter = document.getElementById("btnOpenLetterModal");
   if (btnLetter) {
@@ -244,6 +262,67 @@ function renderAnalysisResults(data) {
   const btnMockSubmit = document.getElementById("btnSubmitMock");
   if (btnMockSubmit) {
     btnMockSubmit.addEventListener("click", () => handleMockSubmission(data.structuredReport, data.actionPlan));
+  }
+}
+
+/**
+ * Attaches event listeners for the "File this complaint" panel.
+ * @param {object} data - Analysis data.
+ */
+function attachFilingPanelListeners(data) {
+  const btnCopy = document.getElementById("btnCopyComplaintText");
+  const copyArea = document.getElementById("filingCopyReadyText");
+
+  if (btnCopy && copyArea) {
+    btnCopy.addEventListener("click", () => {
+      navigator.clipboard.writeText(copyArea.value).then(
+        () => showToast("Complaint text copied to clipboard!", "success"),
+        () => showToast("Failed to copy text", "error")
+      );
+    });
+  }
+
+  const btnExecute = document.getElementById("btnExecuteFiling");
+  if (btnExecute) {
+    btnExecute.addEventListener("click", async () => {
+      btnExecute.disabled = true;
+      btnExecute.innerHTML = `<span>⟳</span><span>Dispatching Grievance to Authority...</span>`;
+
+      try {
+        const res = await fileComplaint(data.structuredReport, data.actionPlan);
+        if (res.success && res.data) {
+          showToast(`Filed Successfully! Tracking Token: ${res.data.trackingId}`, "success");
+
+          // Re-render filing panel in confirmed active state
+          const fileSlot = document.getElementById("fileComplaintSlot");
+          if (fileSlot) {
+            fileSlot.innerHTML = renderFileComplaintPanel({
+              authority: res.data.authority,
+              report: data.structuredReport,
+              actionPlan: data.actionPlan,
+              trackingId: res.data.trackingId,
+              statusTimeline: res.data.statusTimeline,
+              onlineRoute: res.data.onlineRoute,
+              offlineRoute: res.data.offlineRoute,
+              shareRoutes: res.data.shareRoutes,
+              copyReadyText: res.data.onlineRoute?.copyReadyText,
+              isFiled: true
+            });
+            attachFilingPanelListeners(data);
+          }
+
+          // Show confirmation receipt modal
+          showSubmissionConfirmation(res.data);
+
+          // Refresh map reports to show new pin immediately
+          await loadReports();
+        }
+      } catch (err) {
+        showToast(err.message || "Failed to file complaint", "error");
+        btnExecute.disabled = false;
+        btnExecute.innerHTML = `<span>🚀</span><span>File This Complaint & Generate Tracking Token</span>`;
+      }
+    });
   }
 }
 

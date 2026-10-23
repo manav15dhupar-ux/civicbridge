@@ -4,6 +4,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import { EventEmitter } from "node:events";
 import app from "../index.js";
 import complaintRoutes from "../routes/complaintRoutes.js";
@@ -141,5 +142,102 @@ describe("API Services & Data Integrations", () => {
     assert.equal(headersSet["referrer-policy"], "strict-origin-when-cross-origin");
     const csp = headersSet["content-security-policy"] || "";
     assert.equal(csp.includes("tile.openstreetmap.org"), true);
+  });
+
+  it("POST /api/complaints/file should generate tracking ID, status timeline, online/offline routes, share links, and persist report", async () => {
+    const reportsPath = new URL("../../data/reports.json", import.meta.url);
+    const rawBackup = await fs.readFile(reportsPath, "utf-8");
+
+    try {
+      const sampleReport = {
+        category: "Roads & Footpaths",
+        subcategory: "Potholes",
+        severity: 4,
+        description: "Massive pothole on Baner High Street near Balewadi phata.",
+        location_text: "Baner High Street, Pune",
+        lat: 18.5590,
+        lng: 73.7868,
+        urgency_reason: "High accident risk for evening two-wheeler commuters.",
+        evidence_summary: "Visual damage verified.",
+        responsible_authority: "Pune Municipal Corporation - Road Department"
+      };
+
+      const { res, promise } = createMockResponse();
+      const req = {
+        body: {
+          report: sampleReport,
+          citizenNote: "Please look into this immediately. Call 9822012345."
+        }
+      };
+
+      // Invoke router route directly
+      await complaintRoutes.handle(
+        {
+          method: "POST",
+          url: "/file",
+          body: req.body,
+          headers: { "content-type": "application/json" }
+        },
+        res,
+        (err) => {
+          if (err) assert.fail(err.message);
+        }
+      );
+
+      const result = await promise;
+      assert.equal(result.statusCode, 201);
+      assert.equal(result.body.success, true);
+
+      const data = result.body.data;
+      // 1. Tracking ID
+      assert.equal(data.trackingId.startsWith("PMC-2026-"), true);
+
+      // 2. Status Timeline: Submitted -> Verified -> Forwarded -> Resolved
+      assert.equal(Boolean(data.statusTimeline), true);
+      assert.equal(data.statusTimeline.stages.length, 4);
+      assert.equal(data.statusTimeline.stages[0].name, "Submitted");
+      assert.equal(data.statusTimeline.stages[1].name, "Verified");
+      assert.equal(data.statusTimeline.stages[2].name, "Forwarded");
+      assert.equal(data.statusTimeline.stages[3].name, "Resolved");
+
+      // 3. Online Route
+      assert.equal(Boolean(data.onlineRoute.portalUrl), true);
+      assert.equal(Boolean(data.onlineRoute.copyReadyText), true);
+      assert.equal(data.onlineRoute.copyReadyText.includes(data.trackingId), true);
+
+      // 4. Offline Route (office name, documents, best time to visit, what to say)
+      assert.equal(Boolean(data.offlineRoute.officeName), true);
+      assert.equal(Array.isArray(data.offlineRoute.documentsToCarry), true);
+      assert.equal(Boolean(data.offlineRoute.bestTimeToVisit), true);
+      assert.equal(Boolean(data.offlineRoute.whatToSay), true);
+
+      // 5. WhatsApp & Email share routes
+      assert.equal(data.shareRoutes.whatsappUrl.includes("wa.me"), true);
+      assert.equal(data.shareRoutes.emailUrl.startsWith("mailto:"), true);
+
+      // 6. Report saved to reports.json with PII redacted (no 9822012345)
+      assert.equal(Boolean(data.savedReport.id), true);
+      assert.equal(data.savedReport.citizenNote.includes("9822012345"), false);
+    } finally {
+      // Byte-for-byte restoration of pristine reports.json
+      await fs.writeFile(reportsPath, rawBackup, "utf-8");
+    }
+  });
+
+  it("authorities registry should provide category, department, portalUrl, helpline, email, and officeAddress for every entry", async () => {
+    const authorities = await getAuthorities();
+    assert.equal(authorities.length >= 6, true);
+
+    for (const auth of authorities) {
+      assert.equal(typeof auth.category, "string", `Missing category in ${auth.id}`);
+      assert.equal(typeof auth.authorityName, "string", `Missing authorityName in ${auth.id}`);
+      assert.equal(typeof auth.department, "string", `Missing department in ${auth.id}`);
+      assert.equal(typeof auth.portalUrl, "string", `Missing portalUrl in ${auth.id}`);
+      assert.equal(typeof auth.helpline, "string", `Missing helpline in ${auth.id}`);
+      assert.equal(typeof auth.email, "string", `Missing email in ${auth.id}`);
+      assert.equal(typeof auth.officeAddress, "string", `Missing officeAddress in ${auth.id}`);
+      assert.equal(Boolean(auth.offlineGuide.whatToSay), true, `Missing whatToSay in ${auth.id}`);
+      assert.equal(Boolean(auth.offlineGuide.bestTimeToVisit), true, `Missing bestTimeToVisit in ${auth.id}`);
+    }
   });
 });

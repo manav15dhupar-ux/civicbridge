@@ -72,10 +72,13 @@ flowchart TD
    * Identifies the exact Pune civic body with helplines (`1800 1030 222`), WhatsApp bots, and official resolution SLAs (24h to 72h).
    * Provides step-by-step online filing instructions and offline ward office blueprints (addresses, timings, documents to carry).
    * Explains community impact.
-5. **Filing Hub (Step 5):**
-   * **Formal Letter Drafter:** Generates official grievance applications in English, Marathi (औपचारिक मराठी तक्रार अर्ज), or Hindi, complete with subject line and statutory SLA citations. 1-click clipboard copy.
-   * **Mock Authority Submission:** Dispatches incident to mock PMC Care API, issues a realistic tracking token (`PMC-2026-XXXXX`), and updates the live incident feed.
-6. **Privacy Shield (Step 6):**
+5. **"File This Complaint" Hub (Step 5):**
+   * **Online Route:** Copy-ready pre-formatted complaint text + 1-click "Open official portal" button directly linking to the municipal grievance portal.
+   * **Offline Route (Ward Visit):** Office name, specific office address, required documents checklist, best time to visit (e.g. 10:30 AM - 1:00 PM), and exact speaking script ("what to say") to present to the Ward Junior Engineer.
+   * **Direct Share:** 1-click WhatsApp (`wa.me`) and Email (`mailto:`) buttons prefilled with the formal grievance letter.
+   * **Tracking & Status Timeline:** Generates official tracking token (`PMC-2026-XXXXX`), appends redacted report to `data/reports.json`, and visualizes a 4-stage lifecycle timeline: `Submitted -> Verified -> Forwarded -> Resolved`.
+6. **Formal Letter Drafter & Privacy Shield:**
+   * Generates official grievance applications in English, Marathi (औपचारिक मराठी तक्रार अर्ज), or Hindi, complete with subject line and statutory SLA citations.
    * Masks 12-digit Aadhaar numbers (`XXXX-XXXX-1234`), Indian mobile numbers (`+91 98***-**34`), vehicle plates (`MH-12-XX-XXXX`), and names.
    * Discards raw media files from memory immediately following feature extraction (Zero Raw Media Retention).
    * Mandatory citizen consent checkbox.
